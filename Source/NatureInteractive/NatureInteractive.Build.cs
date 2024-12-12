@@ -38,6 +38,11 @@ public class NatureInteractive : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
+				"RenderCore",
+				"RHICore",
+				"RHI", 
+				"InputCore",
+				"Projects",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

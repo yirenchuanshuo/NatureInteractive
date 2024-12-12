@@ -1,12 +1,15 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "NatureInteractive.h"
+#include "Interfaces/IPluginManager.h"
 
 #define LOCTEXT_NAMESPACE "FNatureInteractiveModule"
 
 void FNatureInteractiveModule::StartupModule()
 {
 	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
+	FString ShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("NatureInteractive"))->GetBaseDir(), TEXT("Shaders"));
+	AddShaderSourceDirectoryMapping(TEXT("/Plugin/NatureInteractive"), ShaderDir);
 }
 
 void FNatureInteractiveModule::ShutdownModule()
