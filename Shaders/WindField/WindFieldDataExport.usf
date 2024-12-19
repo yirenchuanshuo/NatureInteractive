@@ -1,0 +1,14 @@
+#include "/Engine/Private/Common.ush"
+Texture3D<float> WindFieldVelocityXInput;
+Texture3D<float> WindFieldVelocityYInput;
+Texture3D<float> WindFieldVelocityZInput;
+RWTexture3D<float4> WindFieldVelocityOutput;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void WindFieldDataExportCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	float X = WindFieldVelocityXInput[ThreadId];
+	float Y = WindFieldVelocityYInput[ThreadId];
+	float Z = WindFieldVelocityZInput[ThreadId];
+	WindFieldVelocityOutput[ThreadId.xyz] = float4(X,Y,Z,1);
+}

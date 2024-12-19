@@ -1,9 +1,10 @@
-#include "WindFieldRender.h"
+#include "../Public/WindFieldRender.h"
 
-#include "WindFieldComponent.h"
+#include "../Public/WindFieldComponent.h"
 
 WindFieldRender::WindFieldRender()
 {
+	AddSourcePass = MakeUnique<WindFieldAddSourcePass>();
 	ExportDataPass = MakeUnique<WindFieldExportDataPass>();
 }
 
@@ -26,5 +27,6 @@ void WindFieldRender::Render(UWindFieldComponent& WindFieldComponent)const
 
 void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const UWindFieldComponent& WindFieldComponent)const
 {
+	AddSourcePass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
 	ExportDataPass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
 }

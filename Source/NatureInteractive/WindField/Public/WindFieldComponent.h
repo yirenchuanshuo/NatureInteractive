@@ -8,11 +8,11 @@
 #include "WindFieldComponent.generated.h"
 
 
-
+class UWindMotorComponent;
 class UTextureRenderTargetVolume;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class NATUREINTERACTIVE_API UWindFieldComponent : public UActorComponent
+class NATUREINTERACTIVE_API UWindFieldComponent : public USceneComponent
 {
 	GENERATED_BODY()
 
@@ -39,8 +39,21 @@ public:
 	TObjectPtr<UTextureRenderTargetVolume> WindFieldVelocity;
 
 
+	UPROPERTY(EditDefaultsOnly,Category = "WindMotor")
+	TSubclassOf<AActor> WindMotorActor;
+
+	TWeakObjectPtr<UWindMotorComponent> WindMotor; 
+
+	
 	FWindFieldRenderData WindFieldRenderData;
+	
 	FTextureRenderTargetResource* WindFieldVelocityResource;
+	FTextureRenderTargetResource* WindFieldChannel_R1Resource;
+	FTextureRenderTargetResource* WindFieldChannel_R2Resource;
+	FTextureRenderTargetResource* WindFieldChannel_G1Resource;
+	FTextureRenderTargetResource* WindFieldChannel_G2Resource;
+	FTextureRenderTargetResource* WindFieldChannel_B1Resource;
+	FTextureRenderTargetResource* WindFieldChannel_B2Resource;
 
 	TUniquePtr<WindFieldRender> WindFieldRenderManager;
 

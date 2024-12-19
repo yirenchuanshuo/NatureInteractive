@@ -1,8 +1,0 @@
-#include "/Engine/Private/Common.ush"
-RWTexture3D<float4> WindFieldVelocityOutput;
-
-[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
-void WindFieldDataExportCS(uint3 ThreadId : SV_DispatchThreadID)
-{
-	WindFieldVelocityOutput[ThreadId.xyz] = float4(1,1,1,1);
-}
