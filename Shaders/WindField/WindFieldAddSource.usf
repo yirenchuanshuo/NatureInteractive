@@ -20,9 +20,10 @@ void WindFieldAddSourceCS(uint3 ThreadId : SV_DispatchThreadID)
 	float ZForce = WindFieldSourceZPrevious[ThreadId];
 	
 	float3 Position = ThreadId.xyz * UnitSize + WindFieldWorldPosition;
+	float3 ForceDir = Position - MotorWorldPosition;
 	float DistanceBetween = distance(Position, MotorWorldPosition);
 	float IsIncidenced = select(DistanceBetween<MotorIncidence, 1, 0);
-	float3 OutVelocity = select(DistanceBetween<MotorIncidence,float3(MotorForce,MotorForce,MotorForce),float3(0,0,0));
+	float3 OutVelocity = select(DistanceBetween<MotorIncidence,float3(MotorForce,MotorForce,MotorForce)*ForceDir,float3(0,0,0));
 	
 	
 	WindFieldSourceXOutput[ThreadId] = XForce*(1-IsIncidenced) + OutVelocity.x;

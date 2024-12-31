@@ -16,6 +16,11 @@ UWindFieldComponent::UWindFieldComponent()
 	
 	// ...
 	WindFieldRenderManager = MakeUnique<WindFieldRender>();
+	Diffusion = 2;
+	DT = 1;
+	TexResolution = 32;
+	WindFieldSize = 3200;
+	UintSize = WindFieldSize / TexResolution;
 }
 
 
@@ -37,46 +42,63 @@ void UWindFieldComponent::BeginPlay()
 	WindMotor = WindMotorActors[0]->FindComponentByClass<UWindMotorComponent>();
 	
 	WindFieldRenderData.SetFeatureLevel(GetWorld()->GetFeatureLevel());
-	WindFieldRenderData.SizeX = 32;
-	WindFieldRenderData.SizeY = 32;
-	WindFieldRenderData.SizeZ = 16;
-	WindFieldRenderData.OutputUAVFormat = PF_A32B32G32R32F;
+	UE_LOG(LogTemp,Warning,TEXT("%u"),WindFieldRenderData.SizeX);
+	UE_LOG(LogTemp,Warning,TEXT("Size::%f"),UintSize);
 	
 	WindFieldVelocity->UpdateResourceImmediate(false);
 	WindFieldChannel_R1->UpdateResourceImmediate(false);
-	WindFieldChannel_R2->UpdateResourceImmediate(false);
 	WindFieldChannel_G1->UpdateResourceImmediate(false);
-	WindFieldChannel_G2->UpdateResourceImmediate(false);
 	WindFieldChannel_B1->UpdateResourceImmediate(false);
-	WindFieldChannel_B2->UpdateResourceImmediate(false);
-
+	
 	WindFieldVelocityResource = WindFieldVelocity->GameThread_GetRenderTargetResource();
 	WindFieldChannel_R1Resource = WindFieldChannel_R1->GameThread_GetRenderTargetResource();
-	WindFieldChannel_R2Resource = WindFieldChannel_R2->GameThread_GetRenderTargetResource();
 	WindFieldChannel_G1Resource = WindFieldChannel_G1->GameThread_GetRenderTargetResource();
-	WindFieldChannel_G2Resource = WindFieldChannel_G2->GameThread_GetRenderTargetResource();
 	WindFieldChannel_B1Resource = WindFieldChannel_B1->GameThread_GetRenderTargetResource();
-	WindFieldChannel_B2Resource = WindFieldChannel_B2->GameThread_GetRenderTargetResource();
+
 }
 
 void UWindFieldComponent::PostLoad()
 {
 	Super::PostLoad();
-	if(WindFieldChannel_R1 == nullptr || WindFieldChannel_R2 == nullptr
-		|| WindFieldChannel_G1 == nullptr || WindFieldChannel_G2 == nullptr
-		|| WindFieldChannel_B1 == nullptr || WindFieldChannel_B2 == nullptr
-		|| WindFieldVelocity == nullptr)
+	if(WindFieldChannel_R1 == nullptr|| WindFieldChannel_G1 == nullptr
+		|| WindFieldChannel_B1 == nullptr || WindFieldVelocity == nullptr)
 	{
 		UE_LOG(LogTemp,Error,TEXT("WindFieldComponent::PostLoad() : RenderTarget is nullptr"));
 		return;
 	}
-	WindFieldChannel_R1->Init(32,32,16,PF_R32_FLOAT);
-	WindFieldChannel_R2->Init(32,32,16,PF_R32_FLOAT);
-	WindFieldChannel_G1->Init(32,32,16,PF_R32_FLOAT);
-	WindFieldChannel_G2->Init(32,32,16,PF_R32_FLOAT);
-	WindFieldChannel_B1->Init(32,32,16,PF_R32_FLOAT);
-	WindFieldChannel_B2->Init(32,32,16,PF_R32_FLOAT);
-	WindFieldVelocity->Init(32,32,16,PF_A32B32G32R32F);
+	
+	WindFieldRenderData.SizeX = TexResolution;
+	WindFieldRenderData.SizeY = TexResolution;
+	WindFieldRenderData.SizeZ = TexResolution/2;
+	WindFieldRenderData.OutputUAVFormat = PF_A32B32G32R32F;
+	UintSize = WindFieldSize / TexResolution;
+	
+	
+	WindFieldChannel_R1->Init(TexResolution,TexResolution,TexResolution/2,PF_R32_FLOAT);
+	WindFieldChannel_G1->Init(TexResolution,TexResolution,TexResolution/2,PF_R32_FLOAT);
+	WindFieldChannel_B1->Init(TexResolution,TexResolution,TexResolution/2,PF_R32_FLOAT);
+	WindFieldVelocity->Init(TexResolution,TexResolution,TexResolution/2,PF_A32B32G32R32F);
+}
+
+void UWindFieldComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	if(PropertyChangedEvent.Property->GetFName() == GET_MEMBER_NAME_CHECKED(UWindFieldComponent,TexResolution))
+	{
+		WindFieldRenderData.SizeX = TexResolution;
+		WindFieldRenderData.SizeY = TexResolution;
+		WindFieldRenderData.SizeZ = TexResolution/2;
+		UintSize = WindFieldSize / TexResolution;
+	}
+	if(PropertyChangedEvent.Property->GetFName() == GET_MEMBER_NAME_CHECKED(UWindFieldComponent,WindFieldSize))
+	{
+		WindFieldChannel_R1->Init(TexResolution,TexResolution,TexResolution/2,PF_R32_FLOAT);
+		WindFieldChannel_G1->Init(TexResolution,TexResolution,TexResolution/2,PF_R32_FLOAT);
+		WindFieldChannel_B1->Init(TexResolution,TexResolution,TexResolution/2,PF_R32_FLOAT);
+		WindFieldVelocity->Init(TexResolution,TexResolution,TexResolution/2,PF_A32B32G32R32F);
+		UintSize = WindFieldSize / TexResolution;
+	}
+	
 }
 
 
@@ -85,7 +107,8 @@ void UWindFieldComponent::TickComponent(float DeltaTime, ELevelTick TickType,
                                         FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	DT = DeltaTime;
 	WindFieldRenderManager->Render(*this);
-	// ...
+	
 }
 

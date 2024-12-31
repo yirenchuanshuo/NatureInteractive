@@ -21,27 +21,28 @@ public:
 	TObjectPtr<UTextureRenderTargetVolume> WindFieldChannel_R1;
 
 	UPROPERTY(EditDefaultsOnly,Category = "WindField")
-	TObjectPtr<UTextureRenderTargetVolume> WindFieldChannel_R2;
-
-	UPROPERTY(EditDefaultsOnly,Category = "WindField")
 	TObjectPtr<UTextureRenderTargetVolume> WindFieldChannel_G1;
-	
-	UPROPERTY(EditDefaultsOnly,Category = "WindField")
-	TObjectPtr<UTextureRenderTargetVolume> WindFieldChannel_G2;
 
 	UPROPERTY(EditDefaultsOnly,Category = "WindField")
 	TObjectPtr<UTextureRenderTargetVolume> WindFieldChannel_B1;
 
 	UPROPERTY(EditDefaultsOnly,Category = "WindField")
-	TObjectPtr<UTextureRenderTargetVolume> WindFieldChannel_B2;
-
-	UPROPERTY(EditDefaultsOnly,Category = "WindField")
 	TObjectPtr<UTextureRenderTargetVolume> WindFieldVelocity;
-
 
 	UPROPERTY(EditDefaultsOnly,Category = "WindMotor")
 	TSubclassOf<AActor> WindMotorActor;
 
+	UPROPERTY(EditDefaultsOnly,Category="WindFieldData")
+	float Diffusion;
+	
+	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData")
+	int32 TexResolution;
+
+	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData")
+	float WindFieldSize;
+	
+	float DT;
+	float UintSize;
 	TWeakObjectPtr<UWindMotorComponent> WindMotor; 
 
 	
@@ -49,12 +50,9 @@ public:
 	
 	FTextureRenderTargetResource* WindFieldVelocityResource;
 	FTextureRenderTargetResource* WindFieldChannel_R1Resource;
-	FTextureRenderTargetResource* WindFieldChannel_R2Resource;
 	FTextureRenderTargetResource* WindFieldChannel_G1Resource;
-	FTextureRenderTargetResource* WindFieldChannel_G2Resource;
 	FTextureRenderTargetResource* WindFieldChannel_B1Resource;
-	FTextureRenderTargetResource* WindFieldChannel_B2Resource;
-
+	
 	TUniquePtr<WindFieldRender> WindFieldRenderManager;
 
 public:
@@ -65,6 +63,7 @@ protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
 	virtual void PostLoad() override;
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 
 public:
 	// Called every frame

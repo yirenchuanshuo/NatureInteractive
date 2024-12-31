@@ -29,4 +29,5 @@ void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const UWindF
 {
 	AddSourcePass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
 	ExportDataPass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
+	DiffusionPass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
 }
