@@ -6,6 +6,8 @@ WindFieldRender::WindFieldRender()
 {
 	AddSourcePass = MakeUnique<WindFieldAddSourcePass>();
 	ExportDataPass = MakeUnique<WindFieldExportDataPass>();
+	DiffusionPass = MakeUnique<WindFieldDiffusionPass>();
+	AdvectPass = MakeUnique<WindFieldAdvectPass>();
 }
 
 void WindFieldRender::Render(UWindFieldComponent& WindFieldComponent)const
@@ -30,4 +32,5 @@ void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const UWindF
 	AddSourcePass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
 	ExportDataPass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
 	DiffusionPass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
+	AdvectPass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
 }

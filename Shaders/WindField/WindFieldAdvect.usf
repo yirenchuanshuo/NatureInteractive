@@ -1,0 +1,84 @@
+#include "/Engine/Private/Common.ush"
+Texture3D<float> WindFieldSourceXPrevious;
+Texture3D<float> WindFieldSourceYPrevious;
+Texture3D<float> WindFieldSourceZPrevious;
+RWTexture3D<float> WindFieldSourceXOutput;
+RWTexture3D<float> WindFieldSourceYOutput;
+RWTexture3D<float> WindFieldSourceZOutput;
+float3 NumCells;
+float DeltaTime;
+
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void WindFieldAdvectCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	float3 Dt0 = DeltaTime * NumCells;
+	float i = ThreadId.x;
+	float j = ThreadId.y;
+	float k = ThreadId.z;
+
+	float U = WindFieldSourceXPrevious[uint3(i,j,k)];
+	float V = WindFieldSourceYPrevious[uint3(i,j,k)];
+	float W = WindFieldSourceZPrevious[uint3(i,j,k)];
+
+	float x = i - Dt0.x * U;
+	float y = j - Dt0.y * V;
+	float z = k - Dt0.z * W;
+
+	x = clamp(x,0.5,NumCells.x+0.5);
+	y = clamp(y,0.5,NumCells.y+0.5);
+	z = clamp(z,0.5,NumCells.z+0.5);
+
+	int x0 = int(x);
+	int y0 = int(y);
+	int z0 = int(z);
+
+	float x1 = x0 + 1;
+	float y1 = y0 + 1;
+	float z1 = z0 + 1;
+
+	float xd = (x-x0)/(x1-x0);
+	float yd = (y-y0)/(y1-y0);
+	float zd = (z-z0)/(z1-z0);
+
+	float VX000 = WindFieldSourceXPrevious[uint3(x0,y0,z0)];
+	float VX100 = WindFieldSourceXPrevious[uint3(x1,y0,z0)];
+	float VX010 = WindFieldSourceXPrevious[uint3(x0,y1,z0)];
+	float VX001 = WindFieldSourceXPrevious[uint3(x0,y0,z1)];
+	float VX101 = WindFieldSourceXPrevious[uint3(x1,y0,z1)];
+	float VX011 = WindFieldSourceXPrevious[uint3(x0,y1,z1)];
+	float VX110 = WindFieldSourceXPrevious[uint3(x1,y1,z0)];
+	float VX111 = WindFieldSourceXPrevious[uint3(x1,y1,z1)];
+
+	float VY000 = WindFieldSourceYPrevious[uint3(x0,y0,z0)];
+	float VY100 = WindFieldSourceYPrevious[uint3(x1,y0,z0)];
+	float VY010 = WindFieldSourceYPrevious[uint3(x0,y1,z0)];
+	float VY001 = WindFieldSourceYPrevious[uint3(x0,y0,z1)];
+	float VY101 = WindFieldSourceYPrevious[uint3(x1,y0,z1)];
+	float VY011 = WindFieldSourceYPrevious[uint3(x0,y1,z1)];
+	float VY110 = WindFieldSourceYPrevious[uint3(x1,y1,z0)];
+	float VY111 = WindFieldSourceYPrevious[uint3(x1,y1,z1)];
+
+	float VZ000 = WindFieldSourceZPrevious[uint3(x0,y0,z0)];
+	float VZ100 = WindFieldSourceZPrevious[uint3(x1,y0,z0)];
+	float VZ010 = WindFieldSourceZPrevious[uint3(x0,y1,z0)];
+	float VZ001 = WindFieldSourceZPrevious[uint3(x0,y0,z1)];
+	float VZ101 = WindFieldSourceZPrevious[uint3(x1,y0,z1)];
+	float VZ011 = WindFieldSourceZPrevious[uint3(x0,y1,z1)];
+	float VZ110 = WindFieldSourceZPrevious[uint3(x1,y1,z0)];
+	float VZ111 = WindFieldSourceZPrevious[uint3(x1,y1,z1)];
+
+	float3 V000 = float3(VX000,VY000,VZ000);
+	float3 V100 = float3(VX100,VY100,VZ100);
+	float3 V010 = float3(VX010,VY010,VZ010);
+	float3 V001 = float3(VX001,VY001,VZ001);
+	float3 V101 = float3(VX101,VY101,VZ101);
+	float3 V011 = float3(VX011,VY011,VZ011);
+	float3 V110 = float3(VX110,VY110,VZ110);
+	float3 V111 = float3(VX111,VY111,VZ111);
+
+	float3 Advect = lerp(lerp(lerp(V000,V100,xd),lerp(V010,V110,xd),yd),lerp(lerp(V001,V101,xd),lerp(V011,V111,xd),yd),zd);
+	WindFieldSourceXOutput[ThreadId] = Advect.x;
+	WindFieldSourceYOutput[ThreadId] = Advect.y;
+	WindFieldSourceZOutput[ThreadId] = Advect.z;
+}
