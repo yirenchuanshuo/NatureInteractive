@@ -1,8 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "../Public/WindMotorComponent.h"
-#include "../Public/WindFieldComponent.h"
+#include "WindField/WindMotorComponent.h"
+#include "WindField/WindFieldComponent.h"
 #include "Kismet/GameplayStatics.h"
 
 

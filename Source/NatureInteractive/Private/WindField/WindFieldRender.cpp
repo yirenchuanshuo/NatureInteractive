@@ -1,6 +1,6 @@
-#include "../Public/WindFieldRender.h"
+#include "WindField/WindFieldRender.h"
 
-#include "../Public/WindFieldComponent.h"
+#include "WindField/WindFieldComponent.h"
 
 WindFieldRender::WindFieldRender()
 {

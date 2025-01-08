@@ -1,8 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "../Public/WindField.h"
-#include "../Public/WindFieldComponent.h"
+#include "WindField/WindField.h"
+#include "WindField/WindFieldComponent.h"
 
 // Sets default values
 AWindField::AWindField()

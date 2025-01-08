@@ -1,9 +1,9 @@
-#include "../Public/WindFieldExportDataPass.h"
+#include "WindField/WindFieldExportDataPass.h"
 #include "DataDrivenShaderPlatformInfo.h"
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 #include "ShaderParameterStruct.h"
-#include "../Public/WindFieldComponent.h"
+#include "WindField/WindFieldComponent.h"
 
 /*SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldVelocityX)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldVelocityY)

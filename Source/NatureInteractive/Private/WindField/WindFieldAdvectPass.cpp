@@ -1,9 +1,9 @@
-#include "../Public/WindFieldAdvectPass.h"
+#include "WindField/WindFieldAdvectPass.h"
 #include "DataDrivenShaderPlatformInfo.h"
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 #include "ShaderParameterStruct.h"
-#include "../Public/WindFieldComponent.h"
+#include "WindField/WindFieldComponent.h"
 
 class FWindFieldComputeShader_AdvectCS : public FGlobalShader
 {
