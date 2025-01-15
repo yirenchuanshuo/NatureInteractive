@@ -1,5 +1,4 @@
 #include "WindField/WindFieldDiffusionPass.h"
-
 #include "DataDrivenShaderPlatformInfo.h"
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
@@ -11,12 +10,12 @@ class FWindFieldComputeShader_DiffusionCS : public FGlobalShader
 	DECLARE_SHADER_TYPE(FWindFieldComputeShader_DiffusionCS, Global);
 	SHADER_USE_PARAMETER_STRUCT(FWindFieldComputeShader_DiffusionCS, FGlobalShader);
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-		SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldSourceXPrevious)
-		SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldSourceYPrevious)
-		SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldSourceZPrevious)
-		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldSourceXOutput)
-		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldSourceYOutput)
-		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldSourceZOutput)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldSourceX)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldSourceY)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldSourceZ)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldDiffusionX)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldDiffusionY)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldDiffusionZ)
 		SHADER_PARAMETER(float,NumCells)
 		SHADER_PARAMETER(float,DeltaTime)
 		SHADER_PARAMETER(float,Diffusion)
@@ -46,54 +45,59 @@ void WindFieldDiffusionPass::Draw(FRHICommandListImmediate& RHICommandList,
 	const UWindFieldComponent& WindFieldComponent, const FWindFieldRenderData& SetupData)
 {
 	FRDGBuilder GraphBuilder(RHICommandList);
-
-	FRDGTextureRef WindFieldSourceX_Previous = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_R1Resource->GetRenderTargetTexture(), TEXT("WindFieldSourceX_Previous"));
-	FRDGTextureRef WindFieldSourceY_Previous = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_G1Resource->GetRenderTargetTexture(), TEXT("WindFieldSourceY_Previous"));
-	FRDGTextureRef WindFieldSourceZ_Previous = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_B1Resource->GetRenderTargetTexture(), TEXT("WindFieldSourceZ_Previous"));
 	
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
 			FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
 			PF_R32_FLOAT,
 			FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
 
-	FRDGTextureRef WindFieldSourceX = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldSourceX"));
-	FRDGTextureUAVRef WindFieldSourceXUAV = GraphBuilder.CreateUAV(WindFieldSourceX);
+	FRDGTextureRef WindFieldDiffusionX = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldDiffusionX"));
+	FRDGTextureUAVRef WindFieldDiffusionXUAV = GraphBuilder.CreateUAV(WindFieldDiffusionX);
 
-	FRDGTextureRef WindFieldSourceY = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldSourceY"));
-	FRDGTextureUAVRef WindFieldSourceYUAV = GraphBuilder.CreateUAV(WindFieldSourceY);
+	FRDGTextureRef WindFieldDiffusionY = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldDiffusionY"));
+	FRDGTextureUAVRef WindFieldDiffusionYUAV = GraphBuilder.CreateUAV(WindFieldDiffusionY);
 
-	FRDGTextureRef WindFieldSourceZ = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldSourceZ"));
-	FRDGTextureUAVRef WindFieldSourceZUAV = GraphBuilder.CreateUAV(WindFieldSourceZ);
+	FRDGTextureRef WindFieldDiffusionZ = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldDiffusionZ"));
+	FRDGTextureUAVRef WindFieldDiffusionZUAV = GraphBuilder.CreateUAV(WindFieldDiffusionZ);
+	
+
+	FRDGTextureRef WindFieldSourceX = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_R1Resource->GetRenderTargetTexture(), TEXT("WindFieldSourceX"));
+	FRDGTextureRef WindFieldSourceY = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_G1Resource->GetRenderTargetTexture(), TEXT("WindFieldSourceY"));
+	FRDGTextureRef WindFieldSourceZ = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_B1Resource->GetRenderTargetTexture(), TEXT("WindFieldSourceZ"));
 
 	TShaderMapRef<FWindFieldComputeShader_DiffusionCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
 	FWindFieldComputeShader_DiffusionCS::FParameters* WindFieldDiffusionParameters = GraphBuilder.AllocParameters<FWindFieldComputeShader_DiffusionCS::FParameters>();
 
 	
-	WindFieldDiffusionParameters->WindFieldSourceXPrevious= WindFieldSourceX_Previous;
-	WindFieldDiffusionParameters->WindFieldSourceYPrevious = WindFieldSourceY_Previous;
-	WindFieldDiffusionParameters->WindFieldSourceZPrevious = WindFieldSourceZ_Previous;
-	WindFieldDiffusionParameters->WindFieldSourceXOutput = WindFieldSourceXUAV;
-	WindFieldDiffusionParameters->WindFieldSourceYOutput = WindFieldSourceYUAV;
-	WindFieldDiffusionParameters->WindFieldSourceZOutput = WindFieldSourceZUAV;
+	WindFieldDiffusionParameters->WindFieldSourceX= WindFieldSourceX;
+	WindFieldDiffusionParameters->WindFieldSourceY = WindFieldSourceY;
+	WindFieldDiffusionParameters->WindFieldSourceZ = WindFieldSourceZ;
+	WindFieldDiffusionParameters->WindFieldDiffusionX = WindFieldDiffusionXUAV;
+	WindFieldDiffusionParameters->WindFieldDiffusionY = WindFieldDiffusionYUAV;
+	WindFieldDiffusionParameters->WindFieldDiffusionZ = WindFieldDiffusionZUAV;
 	WindFieldDiffusionParameters->NumCells = SetupData.SizeX*SetupData.SizeY*SetupData.SizeZ;
 	WindFieldDiffusionParameters->DeltaTime = WindFieldComponent.DT;
 	WindFieldDiffusionParameters->Diffusion = WindFieldComponent.Diffusion;
 	
 	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_DiffusionCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_DiffusionCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_DiffusionCS::ThreadZ);
-	GraphBuilder.AddPass(
-	RDG_EVENT_NAME("WindFieldDataDiffusionComputeShader"),
-	WindFieldDiffusionParameters,
-	ERDGPassFlags::AsyncCompute,
-	[WindFieldComputeShader,&WindFieldDiffusionParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
-	{
-		FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *WindFieldDiffusionParameters,GroupCount);
-	});
-	
-	
 	FRHICopyTextureInfo CopyInfo;
 	CopyInfo.Size = FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
-	AddCopyTexturePass(GraphBuilder,WindFieldSourceX,WindFieldSourceX_Previous,CopyInfo);
-	AddCopyTexturePass(GraphBuilder,WindFieldSourceY,WindFieldSourceY_Previous,CopyInfo);
-	AddCopyTexturePass(GraphBuilder,WindFieldSourceZ,WindFieldSourceZ_Previous,CopyInfo);
+	
+	for(int i=0;i<=WindFieldComponent.DiffusionIterations;i++)
+	{
+		GraphBuilder.AddPass(
+		RDG_EVENT_NAME("WindFieldDataDiffusionComputeShader"),
+		WindFieldDiffusionParameters,
+		ERDGPassFlags::AsyncCompute,
+		[WindFieldComputeShader,&WindFieldDiffusionParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
+		{
+			FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *WindFieldDiffusionParameters,GroupCount);
+		});
+	
+		AddCopyTexturePass(GraphBuilder,WindFieldDiffusionX,WindFieldSourceX,CopyInfo);
+		AddCopyTexturePass(GraphBuilder,WindFieldDiffusionY,WindFieldSourceY,CopyInfo);
+		AddCopyTexturePass(GraphBuilder,WindFieldDiffusionZ,WindFieldSourceZ,CopyInfo);
+	}
+	
 	GraphBuilder.Execute();
 }

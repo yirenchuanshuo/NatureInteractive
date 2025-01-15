@@ -72,7 +72,7 @@ void WindFieldExportDataPass::Draw(FRHICommandListImmediate& RHICommandList,cons
 	GraphBuilder.AddPass(
 	RDG_EVENT_NAME("WindFieldDataExportComputeShader"),
 	WindFieldDataExportParameters,
-	ERDGPassFlags::AsyncCompute,
+	ERDGPassFlags::Compute,
 	[WindFieldComputeShader,&WindFieldDataExportParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
 	{
 		FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *WindFieldDataExportParameters,GroupCount);

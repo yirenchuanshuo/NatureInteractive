@@ -36,13 +36,21 @@ public:
 	float Diffusion;
 	
 	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData")
-	int32 TexResolution;
+	FIntVector TexResolution;
 
 	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData")
-	float WindFieldSize;
+	FVector3f WindFieldSize;
+
+	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData",meta = (ClampMin = "0", ClampMax = "30", UIMin = "0", UIMax = "30"))
+	int32 DiffusionIterations;
+
+	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData",meta = (ClampMin = "0", ClampMax = "30", UIMin = "0", UIMax = "30"))
+	int32 ProjectionPressureIterations;
 	
 	float DT;
 	float UintSize;
+	FVector PreviousWorldPosition;
+	FVector3f MoveVelocity;
 	TWeakObjectPtr<UWindMotorComponent> WindMotor; 
 
 	
@@ -52,6 +60,8 @@ public:
 	FTextureRenderTargetResource* WindFieldChannel_R1Resource;
 	FTextureRenderTargetResource* WindFieldChannel_G1Resource;
 	FTextureRenderTargetResource* WindFieldChannel_B1Resource;
+	FTextureRenderTargetResource* WindFieldChannel_DivergenceResource;
+	FTextureRenderTargetResource* WindFieldChannel_PressureResource;
 	
 	TUniquePtr<WindFieldRender> WindFieldRenderManager;
 

@@ -1,10 +1,10 @@
 #include "/Engine/Private/Common.ush"
-Texture3D<float> WindFieldSourceXPrevious;
-Texture3D<float> WindFieldSourceYPrevious;
-Texture3D<float> WindFieldSourceZPrevious;
-RWTexture3D<float> WindFieldSourceXOutput;
-RWTexture3D<float> WindFieldSourceYOutput;
-RWTexture3D<float> WindFieldSourceZOutput;
+Texture3D<float> WindFieldSourceX;
+Texture3D<float> WindFieldSourceY;
+Texture3D<float> WindFieldSourceZ;
+RWTexture3D<float> WindFieldDiffusionX;
+RWTexture3D<float> WindFieldDiffusionY;
+RWTexture3D<float> WindFieldDiffusionZ;
 float NumCells;
 float DeltaTime;
 float Diffusion;
@@ -14,54 +14,55 @@ void WindFieldDiffusionCS(uint3 ThreadId : SV_DispatchThreadID)
 {
 	float a = DeltaTime*Diffusion*NumCells;
 	float3 WindCellSize;
-	WindFieldSourceXPrevious.GetDimensions(WindCellSize.x,WindCellSize.y,WindCellSize.z);
+	WindFieldSourceX.GetDimensions(WindCellSize.x,WindCellSize.y,WindCellSize.z);
+	WindCellSize -= 1;
 	
 	uint3 Pos = ThreadId;
-	float VX_Self = WindFieldSourceXPrevious[ThreadId];
-	float VY_Self = WindFieldSourceYPrevious[ThreadId];
-	float VZ_Self = WindFieldSourceZPrevious[ThreadId];
+	float VX_Self = WindFieldSourceX[ThreadId];
+	float VY_Self = WindFieldSourceY[ThreadId];
+	float VZ_Self = WindFieldSourceZ[ThreadId];
 	
 	uint3 VX_RightPos = Pos;
 	VX_RightPos.x+=1;
 	VX_RightPos.x = min(VX_RightPos.x,WindCellSize.x);
-	float VX_Rigth = WindFieldSourceXPrevious[VX_RightPos];
-	float VY_Rigth = WindFieldSourceYPrevious[VX_RightPos];
-	float VZ_Rigth = WindFieldSourceZPrevious[VX_RightPos];
+	float VX_Rigth = WindFieldSourceX[VX_RightPos];
+	float VY_Rigth = WindFieldSourceY[VX_RightPos];
+	float VZ_Rigth = WindFieldSourceZ[VX_RightPos];
 
 	uint3 VX_LeftPos = Pos;
 	VX_LeftPos.x-=1;
 	VX_LeftPos.x = max(0,VX_LeftPos.x);
-	float VX_Left =	WindFieldSourceYPrevious[VX_RightPos];
-	float VY_Left = WindFieldSourceYPrevious[VX_RightPos];
-	float VZ_Left = WindFieldSourceZPrevious[VX_RightPos];
+	float VX_Left =	WindFieldSourceX[VX_LeftPos];
+	float VY_Left = WindFieldSourceY[VX_LeftPos];
+	float VZ_Left = WindFieldSourceZ[VX_LeftPos];
 
 	uint3 VX_UpPos = Pos;
 	VX_UpPos.y+=1;
 	VX_UpPos.y = min(VX_UpPos.y,WindCellSize.y);
-	float VX_Up = WindFieldSourceXPrevious[VX_UpPos];
-	float VY_Up = WindFieldSourceYPrevious[VX_UpPos];
-	float VZ_Up = WindFieldSourceZPrevious[VX_UpPos];
+	float VX_Up = WindFieldSourceX[VX_UpPos];
+	float VY_Up = WindFieldSourceY[VX_UpPos];
+	float VZ_Up = WindFieldSourceZ[VX_UpPos];
 
 	uint3 VX_DownPos = Pos;
 	VX_DownPos.y-=1;
 	VX_DownPos.y = max(0,VX_DownPos.y);
-	float VX_Down = WindFieldSourceXPrevious[VX_DownPos];
-	float VY_Down = WindFieldSourceYPrevious[VX_DownPos];
-	float VZ_Down = WindFieldSourceZPrevious[VX_DownPos];
+	float VX_Down = WindFieldSourceX[VX_DownPos];
+	float VY_Down = WindFieldSourceY[VX_DownPos];
+	float VZ_Down = WindFieldSourceZ[VX_DownPos];
 
 	uint3 VX_FrontPos = Pos;
 	VX_FrontPos.z+=1;
 	VX_FrontPos.z = min(VX_FrontPos.z,WindCellSize.z);
-	float VX_Front = WindFieldSourceXPrevious[VX_FrontPos];
-	float VY_Front = WindFieldSourceYPrevious[VX_FrontPos];
-	float VZ_Front = WindFieldSourceZPrevious[VX_FrontPos];
+	float VX_Front = WindFieldSourceX[VX_FrontPos];
+	float VY_Front = WindFieldSourceY[VX_FrontPos];
+	float VZ_Front = WindFieldSourceZ[VX_FrontPos];
 
 	uint3 VX_BackPos = Pos;
 	VX_BackPos.z-=1;
 	VX_BackPos.z = max(0,VX_BackPos.z);
-	float VX_Back = WindFieldSourceXPrevious[VX_BackPos];
-	float VY_Back = WindFieldSourceYPrevious[VX_BackPos];
-	float VZ_Back = WindFieldSourceZPrevious[VX_BackPos];
+	float VX_Back = WindFieldSourceX[VX_BackPos];
+	float VY_Back = WindFieldSourceY[VX_BackPos];
+	float VZ_Back = WindFieldSourceZ[VX_BackPos];
 
 	float3 V_Self = float3(VX_Self,VY_Self,VZ_Self);
 	float3 V_Rigth = float3(VX_Rigth,VY_Rigth,VZ_Rigth);
@@ -72,7 +73,7 @@ void WindFieldDiffusionCS(uint3 ThreadId : SV_DispatchThreadID)
 	float3 V_Back = float3(VX_Back,VY_Back,VZ_Back);
 
 	float3 Diffusion = (V_Self+a*(V_Rigth+V_Left+V_Up+V_Down+V_Front+V_Back))/(1+6*a);
-	WindFieldSourceXOutput[ThreadId] = Diffusion.x;
-	WindFieldSourceYOutput[ThreadId] = Diffusion.y;
-	WindFieldSourceZOutput[ThreadId] = Diffusion.z;
+	WindFieldDiffusionX[ThreadId] = Diffusion.x;
+	WindFieldDiffusionY[ThreadId] = Diffusion.y;
+	WindFieldDiffusionZ[ThreadId] = Diffusion.z;
 }

@@ -1,10 +1,10 @@
 #include "/Engine/Private/Common.ush"
-Texture3D<float> WindFieldSourceXPrevious;
-Texture3D<float> WindFieldSourceYPrevious;
-Texture3D<float> WindFieldSourceZPrevious;
-RWTexture3D<float> WindFieldSourceXOutput;
-RWTexture3D<float> WindFieldSourceYOutput;
-RWTexture3D<float> WindFieldSourceZOutput;
+Texture3D<float> WindFieldDiffusionX;
+Texture3D<float> WindFieldDiffusionY;
+Texture3D<float> WindFieldDiffusionZ;
+RWTexture3D<float> WindFieldAdvectX;
+RWTexture3D<float> WindFieldAdvectY;
+RWTexture3D<float> WindFieldAdvectZ;
 float3 NumCells;
 float DeltaTime;
 
@@ -17,9 +17,9 @@ void WindFieldAdvectCS(uint3 ThreadId : SV_DispatchThreadID)
 	float j = ThreadId.y;
 	float k = ThreadId.z;
 
-	float U = WindFieldSourceXPrevious[uint3(i,j,k)];
-	float V = WindFieldSourceYPrevious[uint3(i,j,k)];
-	float W = WindFieldSourceZPrevious[uint3(i,j,k)];
+	float U = WindFieldDiffusionX[uint3(i,j,k)];
+	float V = WindFieldDiffusionY[uint3(i,j,k)];
+	float W = WindFieldDiffusionZ[uint3(i,j,k)];
 
 	float x = i - Dt0.x * U;
 	float y = j - Dt0.y * V;
@@ -41,32 +41,32 @@ void WindFieldAdvectCS(uint3 ThreadId : SV_DispatchThreadID)
 	float yd = (y-y0)/(y1-y0);
 	float zd = (z-z0)/(z1-z0);
 
-	float VX000 = WindFieldSourceXPrevious[uint3(x0,y0,z0)];
-	float VX100 = WindFieldSourceXPrevious[uint3(x1,y0,z0)];
-	float VX010 = WindFieldSourceXPrevious[uint3(x0,y1,z0)];
-	float VX001 = WindFieldSourceXPrevious[uint3(x0,y0,z1)];
-	float VX101 = WindFieldSourceXPrevious[uint3(x1,y0,z1)];
-	float VX011 = WindFieldSourceXPrevious[uint3(x0,y1,z1)];
-	float VX110 = WindFieldSourceXPrevious[uint3(x1,y1,z0)];
-	float VX111 = WindFieldSourceXPrevious[uint3(x1,y1,z1)];
+	float VX000 = WindFieldDiffusionX[uint3(x0,y0,z0)];
+	float VX100 = WindFieldDiffusionX[uint3(x1,y0,z0)];
+	float VX010 = WindFieldDiffusionX[uint3(x0,y1,z0)];
+	float VX001 = WindFieldDiffusionX[uint3(x0,y0,z1)];
+	float VX101 = WindFieldDiffusionX[uint3(x1,y0,z1)];
+	float VX011 = WindFieldDiffusionX[uint3(x0,y1,z1)];
+	float VX110 = WindFieldDiffusionX[uint3(x1,y1,z0)];
+	float VX111 = WindFieldDiffusionX[uint3(x1,y1,z1)];
 
-	float VY000 = WindFieldSourceYPrevious[uint3(x0,y0,z0)];
-	float VY100 = WindFieldSourceYPrevious[uint3(x1,y0,z0)];
-	float VY010 = WindFieldSourceYPrevious[uint3(x0,y1,z0)];
-	float VY001 = WindFieldSourceYPrevious[uint3(x0,y0,z1)];
-	float VY101 = WindFieldSourceYPrevious[uint3(x1,y0,z1)];
-	float VY011 = WindFieldSourceYPrevious[uint3(x0,y1,z1)];
-	float VY110 = WindFieldSourceYPrevious[uint3(x1,y1,z0)];
-	float VY111 = WindFieldSourceYPrevious[uint3(x1,y1,z1)];
+	float VY000 = WindFieldDiffusionY[uint3(x0,y0,z0)];
+	float VY100 = WindFieldDiffusionY[uint3(x1,y0,z0)];
+	float VY010 = WindFieldDiffusionY[uint3(x0,y1,z0)];
+	float VY001 = WindFieldDiffusionY[uint3(x0,y0,z1)];
+	float VY101 = WindFieldDiffusionY[uint3(x1,y0,z1)];
+	float VY011 = WindFieldDiffusionY[uint3(x0,y1,z1)];
+	float VY110 = WindFieldDiffusionY[uint3(x1,y1,z0)];
+	float VY111 = WindFieldDiffusionY[uint3(x1,y1,z1)];
 
-	float VZ000 = WindFieldSourceZPrevious[uint3(x0,y0,z0)];
-	float VZ100 = WindFieldSourceZPrevious[uint3(x1,y0,z0)];
-	float VZ010 = WindFieldSourceZPrevious[uint3(x0,y1,z0)];
-	float VZ001 = WindFieldSourceZPrevious[uint3(x0,y0,z1)];
-	float VZ101 = WindFieldSourceZPrevious[uint3(x1,y0,z1)];
-	float VZ011 = WindFieldSourceZPrevious[uint3(x0,y1,z1)];
-	float VZ110 = WindFieldSourceZPrevious[uint3(x1,y1,z0)];
-	float VZ111 = WindFieldSourceZPrevious[uint3(x1,y1,z1)];
+	float VZ000 = WindFieldDiffusionZ[uint3(x0,y0,z0)];
+	float VZ100 = WindFieldDiffusionZ[uint3(x1,y0,z0)];
+	float VZ010 = WindFieldDiffusionZ[uint3(x0,y1,z0)];
+	float VZ001 = WindFieldDiffusionZ[uint3(x0,y0,z1)];
+	float VZ101 = WindFieldDiffusionZ[uint3(x1,y0,z1)];
+	float VZ011 = WindFieldDiffusionZ[uint3(x0,y1,z1)];
+	float VZ110 = WindFieldDiffusionZ[uint3(x1,y1,z0)];
+	float VZ111 = WindFieldDiffusionZ[uint3(x1,y1,z1)];
 
 	float3 V000 = float3(VX000,VY000,VZ000);
 	float3 V100 = float3(VX100,VY100,VZ100);
@@ -78,7 +78,7 @@ void WindFieldAdvectCS(uint3 ThreadId : SV_DispatchThreadID)
 	float3 V111 = float3(VX111,VY111,VZ111);
 
 	float3 Advect = lerp(lerp(lerp(V000,V100,xd),lerp(V010,V110,xd),yd),lerp(lerp(V001,V101,xd),lerp(V011,V111,xd),yd),zd);
-	WindFieldSourceXOutput[ThreadId] = Advect.x;
-	WindFieldSourceYOutput[ThreadId] = Advect.y;
-	WindFieldSourceZOutput[ThreadId] = Advect.z;
+	WindFieldAdvectX[ThreadId] = Advect.x;
+	WindFieldAdvectY[ThreadId] = Advect.y;
+	WindFieldAdvectZ[ThreadId] = Advect.z;
 }

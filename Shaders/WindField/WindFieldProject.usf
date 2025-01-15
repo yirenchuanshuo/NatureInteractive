@@ -1,0 +1,82 @@
+#include "/Engine/Private/Common.ush"
+Texture3D<float> WindFieldVelocityXInput;
+Texture3D<float> WindFieldVelocityYInput;
+Texture3D<float> WindFieldVelocityZInput;
+Texture3D<float> WindFieldDivergenceInput;
+Texture3D<float> WindFieldPressureInput;
+
+RWTexture3D<float> WindFieldPressureOutput;
+RWTexture3D<float> WindFieldDivergenceOutput;
+
+float3 NumCells;
+
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void WindFieldProjectFirstCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	float h = 1.0/NumCells.x;
+	uint3 pos = ThreadId;
+	uint3 WindCellSize = NumCells - 1;
+
+	uint3 PosRight = pos;
+	PosRight.x = min(PosRight.x + 1,WindCellSize.x);
+	float U0 = WindFieldVelocityXInput[PosRight];
+
+	uint3 PosFront = pos;
+	PosFront.y = min(PosFront.y + 1, WindCellSize.y);
+	float V0 = WindFieldVelocityYInput[PosFront];
+
+	uint3 PosUp = pos;
+	PosUp.z = min(PosUp.z + 1, WindCellSize.z);
+	float W0 = WindFieldVelocityZInput[PosUp];
+
+	uint3 PosLeft = pos;
+	PosLeft.x = max(PosLeft.x - 1, 0);
+	float U1 = WindFieldVelocityXInput[PosLeft];
+
+	uint3 PosBack = pos;
+	PosBack.y = max(PosBack.y - 1, 0);
+	float V1 = WindFieldVelocityYInput[PosBack];
+
+	uint3 PosDown = pos;
+	PosDown.z = max(PosDown.z - 1, 0);
+	float W1 = WindFieldVelocityZInput[PosDown];
+
+	WindFieldDivergenceOutput[pos] = -h/3 * (U0 - U1 + V0 - V1 + W0 - W1);
+	WindFieldPressureOutput[pos] = 0;
+}
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void WindFieldProjectSecondCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	uint3 pos = ThreadId;
+	float Div = WindFieldDivergenceInput[pos];
+	
+	uint3 WindCellSize = NumCells - 1;
+	
+	uint3 PosRight = pos;
+	PosRight.x = min(PosRight.x + 1, WindCellSize.x);
+	float PU0 = WindFieldPressureInput[PosRight];
+
+	uint3 PosFront = pos;
+	PosFront.y = min(PosFront.y + 1, WindCellSize.y);
+	float PV0 = WindFieldPressureInput[PosFront];
+
+	uint3 PosUp = pos;
+	PosUp.z = min(PosUp.z + 1, WindCellSize.z);
+	float PW0 = WindFieldPressureInput[PosUp];
+
+	uint3 PosLeft = pos;
+	PosLeft.x = max(PosLeft.x - 1, 0);
+	float PU1 = WindFieldPressureInput[PosLeft];
+
+	uint3 PosBack = pos;
+	PosBack.y = max(PosBack.y - 1, 0);
+	float PV1 = WindFieldPressureInput[PosBack];
+
+	uint3 PosDown = pos;
+	PosDown.z = max(PosDown.z - 1, 0);
+	float PW1 = WindFieldPressureInput[PosDown];
+
+	WindFieldPressureOutput[pos] = (PU0 + PU1 + PV0 + PV1 + PW0 + PW1 - Div) / 6;
+}

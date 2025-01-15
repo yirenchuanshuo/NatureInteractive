@@ -1,0 +1,73 @@
+#include "/Engine/Private/Common.ush"
+Texture3D<float> WindFieldVelocityXInput;
+Texture3D<float> WindFieldVelocityYInput;
+Texture3D<float> WindFieldVelocityZInput;
+
+RWTexture3D<float>WindFieldVelocityXOutput;
+RWTexture3D<float> WindFieldVelocityYOutput;
+RWTexture3D<float> WindFieldVelocityZOutput;
+
+float3 MoveVelocity;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void WindFieldOffsetCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	float3 pos = ThreadId.xyz;
+	float x = pos.x + MoveVelocity.x;
+	float y = pos.y + MoveVelocity.y;
+	float z = pos.z + MoveVelocity.z;
+
+	int x0 = int(x);
+	int y0 = int(y);
+	int z0 = int(z);
+
+	float x1 = x0 + 1;
+	float y1 = y0 + 1;
+	float z1 = z0 + 1;
+
+	float xd = (x-x0)/(x1-x0);
+	float yd = (y-y0)/(y1-y0);
+	float zd = (z-z0)/(z1-z0);
+
+	float VX000 = WindFieldVelocityXInput[uint3(x0,y0,z0)];
+	float VX100 = WindFieldVelocityXInput[uint3(x1,y0,z0)];
+	float VX010 = WindFieldVelocityXInput[uint3(x0,y1,z0)];
+	float VX001 = WindFieldVelocityXInput[uint3(x0,y0,z1)];
+	float VX101 = WindFieldVelocityXInput[uint3(x1,y0,z1)];
+	float VX011 = WindFieldVelocityXInput[uint3(x0,y1,z1)];
+	float VX110 = WindFieldVelocityXInput[uint3(x1,y1,z0)];
+	float VX111 = WindFieldVelocityXInput[uint3(x1,y1,z1)];
+
+	float VY000 = WindFieldVelocityYInput[uint3(x0,y0,z0)];
+	float VY100 = WindFieldVelocityYInput[uint3(x1,y0,z0)];
+	float VY010 = WindFieldVelocityYInput[uint3(x0,y1,z0)];
+	float VY001 = WindFieldVelocityYInput[uint3(x0,y0,z1)];
+	float VY101 = WindFieldVelocityYInput[uint3(x1,y0,z1)];
+	float VY011 = WindFieldVelocityYInput[uint3(x0,y1,z1)];
+	float VY110 = WindFieldVelocityYInput[uint3(x1,y1,z0)];
+	float VY111 = WindFieldVelocityYInput[uint3(x1,y1,z1)];
+
+	float VZ000 = WindFieldVelocityZInput[uint3(x0,y0,z0)];
+	float VZ100 = WindFieldVelocityZInput[uint3(x1,y0,z0)];
+	float VZ010 = WindFieldVelocityZInput[uint3(x0,y1,z0)];
+	float VZ001 = WindFieldVelocityZInput[uint3(x0,y0,z1)];
+	float VZ101 = WindFieldVelocityZInput[uint3(x1,y0,z1)];
+	float VZ011 = WindFieldVelocityZInput[uint3(x0,y1,z1)];
+	float VZ110 = WindFieldVelocityZInput[uint3(x1,y1,z0)];
+	float VZ111 = WindFieldVelocityZInput[uint3(x1,y1,z1)];
+
+	float3 V000 = float3(VX000,VY000,VZ000);
+	float3 V100 = float3(VX100,VY100,VZ100);
+	float3 V010 = float3(VX010,VY010,VZ010);
+	float3 V001 = float3(VX001,VY001,VZ001);
+	float3 V101 = float3(VX101,VY101,VZ101);
+	float3 V011 = float3(VX011,VY011,VZ011);
+	float3 V110 = float3(VX110,VY110,VZ110);
+	float3 V111 = float3(VX111,VY111,VZ111);
+
+	float3 V = lerp(lerp(lerp(V000,V100,xd),lerp(V010,V110,xd),yd),lerp(lerp(V001,V101,xd),lerp(V011,V111,xd),yd),zd);
+
+	WindFieldVelocityXOutput[ThreadId] = V.x;
+	WindFieldVelocityYOutput[ThreadId] = V.y;
+	WindFieldVelocityZOutput[ThreadId] = V.z;
+}

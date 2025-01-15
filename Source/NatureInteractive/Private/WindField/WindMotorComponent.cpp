@@ -21,12 +21,13 @@ UWindMotorComponent::UWindMotorComponent()
 void UWindMotorComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	TArray<AActor*> WindFieldActors;
+	/*TArray<AActor*> WindFieldActors;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(),WindFieldActor,WindFieldActors);
 	if(!WindFieldActors.IsEmpty())
 	{
 		WindFieldComponent = WindFieldActors[0]->FindComponentByClass<UWindFieldComponent>();
-	}
+	}*/
+	PreviousPosition = GetComponentLocation();
 }
 
 
@@ -35,7 +36,5 @@ void UWindMotorComponent::TickComponent(float DeltaTime, ELevelTick TickType,
                                         FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	// ...
 }
 

@@ -26,14 +26,17 @@ public:
 	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 public:
-	UPROPERTY(EditDefaultsOnly,Category = "WindField")
-	TSubclassOf<AActor> WindFieldActor;
+	/*UPROPERTY(EditDefaultsOnly,Category = "WindField")
+	TSubclassOf<AActor> WindFieldActor;*/
 
 	UPROPERTY(EditDefaultsOnly,Category = "WindMotor")
 	float Radius = 100.0f;
 
 	UPROPERTY(EditDefaultsOnly,Category = "WindMotor")
 	float Strength = 10.0f;
+
+	FVector PreviousPosition = FVector(0.0f,0.0f,0.0f);
+	FVector3f MoveVelocity = FVector3f(0.0f,0.0f,0.0f);
 	
-	TWeakObjectPtr<UWindFieldComponent> WindFieldComponent;
+	//TWeakObjectPtr<UWindFieldComponent> WindFieldComponent;
 };

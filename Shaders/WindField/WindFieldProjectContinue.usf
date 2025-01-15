@@ -1,0 +1,56 @@
+#include "/Engine/Private/Common.ush"
+Texture3D<float> WindFieldVelocityXInput;
+Texture3D<float> WindFieldVelocityYInput;
+Texture3D<float> WindFieldVelocityZInput;
+Texture3D<float> WindFieldPressureInput;
+
+RWTexture3D<float> WindFieldVelocityXOutput;
+RWTexture3D<float> WindFieldVelocityYOutput;
+RWTexture3D<float> WindFieldVelocityZOutput;
+
+
+float3 NumCells;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void WindFieldProjectThirdCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	float h = 1.0/NumCells.x;
+	uint3 pos = ThreadId;
+	uint3 WindCellSize = NumCells - 1;
+
+	uint3 PosRight = pos;
+	PosRight.x = min(PosRight.x + 1, WindCellSize.x);
+	float PU0 = WindFieldPressureInput[PosRight];
+
+	uint3 PosFront = pos;
+	PosFront.y = min(PosFront.y + 1, WindCellSize.y);
+	float PV0 = WindFieldPressureInput[PosFront];
+
+	uint3 PosUp = pos;
+	PosUp.z = min(PosUp.z + 1, WindCellSize.z);
+	float PW0 = WindFieldPressureInput[PosUp];
+
+	uint3 PosLeft = pos;
+	PosLeft.x = max(PosLeft.x - 1, 0);
+	float PU1 = WindFieldPressureInput[PosLeft];
+
+	uint3 PosBack = pos;
+	PosBack.y = max(PosBack.y - 1, 0);
+	float PV1 = WindFieldPressureInput[PosBack];
+
+	uint3 PosDown = pos;
+	PosDown.z = max(PosDown.z - 1, 0);
+	float PW1 = WindFieldPressureInput[PosDown];
+
+	float U = WindFieldVelocityXInput[pos];
+	float V = WindFieldVelocityYInput[pos];
+	float W = WindFieldVelocityZInput[pos];
+
+	U -= (PU0 - PU1)/(h*3);
+	V -= (PV0 - PV1)/(h*3);
+	W -= (PW0 - PW1)/(h*3);
+
+	WindFieldVelocityXOutput[pos] = U;
+	WindFieldVelocityYOutput[pos] = V;
+	WindFieldVelocityZOutput[pos] = W;
+}
