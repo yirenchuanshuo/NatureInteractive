@@ -29,6 +29,9 @@ public:
 	UPROPERTY(EditDefaultsOnly,Category = "WindField")
 	TObjectPtr<UTextureRenderTargetVolume> WindFieldVelocity;
 
+	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData")
+	TObjectPtr<UMaterialParameterCollection> WindFieldMaterialParameterCollection;
+	
 	UPROPERTY(EditDefaultsOnly,Category = "WindMotor")
 	TSubclassOf<AActor> WindMotorActor;
 
@@ -38,7 +41,7 @@ public:
 	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData")
 	FIntVector TexResolution;
 
-	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData")
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly,Category = "WindFieldData")
 	FVector3f WindFieldSize;
 
 	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData",meta = (ClampMin = "0", ClampMax = "30", UIMin = "0", UIMax = "30"))

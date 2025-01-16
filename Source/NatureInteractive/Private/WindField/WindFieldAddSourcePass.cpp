@@ -20,7 +20,8 @@ class FWindFieldComputeShader_AddSourceCS : public FGlobalShader
 		SHADER_PARAMETER(FVector3f,WindFieldWorldPosition)
 		SHADER_PARAMETER(FVector3f,MotorWorldPosition)
 		SHADER_PARAMETER(FVector3f,HalfFieldSize)
-		SHADER_PARAMETER(FVector3f,MotorForce)
+		SHADER_PARAMETER(FVector3f,MotorForceDir)
+		SHADER_PARAMETER(float,MotorForce)
 		SHADER_PARAMETER(float,UnitSize)
 		SHADER_PARAMETER(float,MotorIncidence)
 	END_SHADER_PARAMETER_STRUCT()
@@ -82,8 +83,9 @@ void WindFieldAddSourcePass::Draw(FRHICommandListImmediate& RHICommandList,
 	WindFieldAddSourceParameters->MotorWorldPosition =	FVector3f(WindFieldComponent.WindMotor->GetComponentLocation());
 	WindFieldAddSourceParameters->UnitSize = WindFieldComponent.UintSize;
 	WindFieldAddSourceParameters->HalfFieldSize = WindFieldComponent.WindFieldSize/2;
+	WindFieldAddSourceParameters->MotorForceDir = WindFieldComponent.WindMotor->MoveVelocity;
 	WindFieldAddSourceParameters->MotorIncidence = WindFieldComponent.WindMotor->Radius;
-	WindFieldAddSourceParameters->MotorForce = FVector3f(WindFieldComponent.WindMotor->Strength * WindFieldComponent.WindMotor->MoveVelocity);
+	WindFieldAddSourceParameters->MotorForce = WindFieldComponent.WindMotor->Strength;
 	
 	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_AddSourceCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_AddSourceCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_AddSourceCS::ThreadZ);
 	GraphBuilder.AddPass(

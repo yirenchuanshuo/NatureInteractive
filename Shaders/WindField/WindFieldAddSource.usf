@@ -9,9 +9,10 @@ RWTexture3D<float> WindFieldSourceZOutput;
 float3 WindFieldWorldPosition;
 float3 MotorWorldPosition;
 float3 HalfFieldSize;
+float3 MotorForceDir;
 float MotorIncidence;
 float UnitSize;
-float3 MotorForce;
+float MotorForce;
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldAddSourceCS(uint3 ThreadId : SV_DispatchThreadID)
@@ -25,11 +26,11 @@ void WindFieldAddSourceCS(uint3 ThreadId : SV_DispatchThreadID)
 	float3 ForceDir = Position - MotorWorldPosition;
 	float DistanceBetween = distance(Position, MotorWorldPosition);
 	float IsIncident = select(DistanceBetween<MotorIncidence, 1, 0);
-	float3 OutVelocity = select(DistanceBetween<MotorIncidence,MotorForce,float3(0,0,0));
+	float3 OutVelocity = select(DistanceBetween<MotorIncidence,MotorForceDir*MotorForce,float3(0,0,0));
 	
 	
-	WindFieldSourceXOutput[ThreadId] = XForce*(1-IsIncident) + OutVelocity.x;
-	WindFieldSourceYOutput[ThreadId] = YForce*(1-IsIncident) + OutVelocity.y;
-	WindFieldSourceZOutput[ThreadId] = ZForce*(1-IsIncident) + OutVelocity.z;
+	WindFieldSourceXOutput[ThreadId] = XForce + OutVelocity.x;
+	WindFieldSourceYOutput[ThreadId] = YForce + OutVelocity.y;
+	WindFieldSourceZOutput[ThreadId] = ZForce + OutVelocity.z;
 	
 }

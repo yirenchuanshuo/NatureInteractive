@@ -5,6 +5,8 @@
 #include "WindField/WindMotorComponent.h"
 #include "Engine/TextureRenderTargetVolume.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetMaterialLibrary.h"
+#include "Materials/MaterialParameterCollection.h"
 
 
 // Sets default values for this component's properties
@@ -58,7 +60,8 @@ void UWindFieldComponent::BeginPlay()
 	WindFieldChannel_R1Resource = WindFieldChannel_R1->GameThread_GetRenderTargetResource();
 	WindFieldChannel_G1Resource = WindFieldChannel_G1->GameThread_GetRenderTargetResource();
 	WindFieldChannel_B1Resource = WindFieldChannel_B1->GameThread_GetRenderTargetResource();
-
+	
+	UKismetMaterialLibrary::SetVectorParameterValue(GetWorld(),WindFieldMaterialParameterCollection,FName("WindFieldSize"),FLinearColor(WindFieldSize));
 }
 
 void UWindFieldComponent::PostLoad()
@@ -112,7 +115,8 @@ void UWindFieldComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	DT = DeltaTime;
 	MoveVelocity = FVector3f(GetComponentLocation() - PreviousWorldPosition) / UintSize;
-	WindMotor->MoveVelocity = FVector3f(WindMotor->GetComponentLocation() - WindMotor->PreviousPosition);
+	WindMotor->MoveVelocity = FVector3f(WindMotor->GetComponentLocation() - WindMotor->PreviousPosition) / UintSize;
+	UKismetMaterialLibrary::SetVectorParameterValue(GetWorld(),WindFieldMaterialParameterCollection,FName("WindFieldPos"),FLinearColor(GetComponentLocation()));
 	WindFieldRenderManager->Render(*this);
 	PreviousWorldPosition = GetComponentLocation();
 	WindMotor->PreviousPosition = WindMotor->GetComponentLocation();
