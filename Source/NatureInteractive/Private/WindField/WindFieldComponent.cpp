@@ -6,7 +6,7 @@
 #include "Engine/TextureRenderTargetVolume.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMaterialLibrary.h"
-#include "Materials/MaterialParameterCollection.h"
+#include "WindField/WindFieldRenderData.h"
 
 
 // Sets default values for this component's properties
@@ -19,14 +19,11 @@ UWindFieldComponent::UWindFieldComponent()
 	// ...
 	WindFieldRenderManager = MakeUnique<WindFieldRender>();
 	Diffusion = 2;
-	DT = 1;
 	TexResolution = FIntVector(32,32,16);
 	WindFieldSize = FVector3f(3200,3200,1600);
-	UintSize = WindFieldSize.X / TexResolution.X;
 	DiffusionIterations = 10;
 	ProjectionPressureIterations = 10;
-	PreviousWorldPosition = FVector(0,0,0);
-	MoveVelocity = FVector3f(0,0,0);
+	WindFieldRenderData = MakeShared<FWindFieldRenderData>();
 }
 
 
@@ -47,19 +44,12 @@ void UWindFieldComponent::BeginPlay()
 	
 	WindMotor = WindMotorActors[0]->FindComponentByClass<UWindMotorComponent>();
 	
-	WindFieldRenderData.SetFeatureLevel(GetWorld()->GetFeatureLevel());
-	UE_LOG(LogTemp,Warning,TEXT("%u"),WindFieldRenderData.SizeX);
-	UE_LOG(LogTemp,Warning,TEXT("Size::%f"),UintSize);
-	
 	WindFieldVelocity->UpdateResourceImmediate(false);
 	WindFieldChannel_R1->UpdateResourceImmediate(false);
 	WindFieldChannel_G1->UpdateResourceImmediate(false);
 	WindFieldChannel_B1->UpdateResourceImmediate(false);
-	
-	WindFieldVelocityResource = WindFieldVelocity->GameThread_GetRenderTargetResource();
-	WindFieldChannel_R1Resource = WindFieldChannel_R1->GameThread_GetRenderTargetResource();
-	WindFieldChannel_G1Resource = WindFieldChannel_G1->GameThread_GetRenderTargetResource();
-	WindFieldChannel_B1Resource = WindFieldChannel_B1->GameThread_GetRenderTargetResource();
+
+	WindFieldRenderData->SetData(*this);
 	
 	UKismetMaterialLibrary::SetVectorParameterValue(GetWorld(),WindFieldMaterialParameterCollection,FName("WindFieldSize"),FLinearColor(WindFieldSize));
 }
@@ -74,12 +64,8 @@ void UWindFieldComponent::PostLoad()
 		return;
 	}
 	
-	WindFieldRenderData.SizeX = TexResolution.X;
-	WindFieldRenderData.SizeY = TexResolution.Y;
-	WindFieldRenderData.SizeZ = TexResolution.Z;
-	WindFieldRenderData.OutputUAVFormat = PF_A32B32G32R32F;
-	UintSize = WindFieldSize.X / TexResolution.X;
-	
+	WindFieldRenderData->SetSizeData(TexResolution);
+	WindFieldRenderData->OutputUAVFormat = PF_A32B32G32R32F;
 	
 	WindFieldChannel_R1->Init(TexResolution.X, TexResolution.Y, TexResolution.Z, PF_R32_FLOAT);
 	WindFieldChannel_G1->Init(TexResolution.X, TexResolution.Y, TexResolution.Z, PF_R32_FLOAT);
@@ -92,33 +78,22 @@ void UWindFieldComponent::PostEditChangeProperty(FPropertyChangedEvent& Property
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 	if(PropertyChangedEvent.Property->GetFName() == GET_MEMBER_NAME_CHECKED(UWindFieldComponent,TexResolution))
 	{
-		WindFieldRenderData.SizeX = TexResolution.X;
-		WindFieldRenderData.SizeY = TexResolution.Y;
-		WindFieldRenderData.SizeZ = TexResolution.Z;
-		UintSize = WindFieldSize.X / TexResolution.X;
-	}
-	if(PropertyChangedEvent.Property->GetFName() == GET_MEMBER_NAME_CHECKED(UWindFieldComponent,WindFieldSize))
-	{
-		WindFieldChannel_R1->Init(TexResolution.X, TexResolution.Y, TexResolution.Z, PF_R32_FLOAT);
-		WindFieldChannel_G1->Init(TexResolution.X, TexResolution.Y, TexResolution.Z, PF_R32_FLOAT);
-		WindFieldChannel_B1->Init(TexResolution.X, TexResolution.Y, TexResolution.Z, PF_R32_FLOAT);
-		WindFieldVelocity->Init(TexResolution.X, TexResolution.Y, TexResolution.Z, PF_A32B32G32R32F);
-		UintSize = WindFieldSize.X / TexResolution.X;
+		WindFieldRenderData->SetSizeData(TexResolution);
+		WindFieldChannel_R1->InitAutoFormat(TexResolution.X, TexResolution.Y, TexResolution.Z);
+		WindFieldChannel_G1->InitAutoFormat(TexResolution.X, TexResolution.Y, TexResolution.Z);
+		WindFieldChannel_B1->InitAutoFormat(TexResolution.X, TexResolution.Y, TexResolution.Z);
+		WindFieldVelocity->InitAutoFormat(TexResolution.X, TexResolution.Y, TexResolution.Z);
 	}
 }
 
 
 // Called every frame
-void UWindFieldComponent::TickComponent(float DeltaTime, ELevelTick TickType,
-                                        FActorComponentTickFunction* ThisTickFunction)
+void UWindFieldComponent::TickComponent(float DeltaTime, ELevelTick TickType,FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	DT = DeltaTime;
-	MoveVelocity = FVector3f(GetComponentLocation() - PreviousWorldPosition) / UintSize;
-	WindMotor->MoveVelocity = FVector3f(WindMotor->GetComponentLocation() - WindMotor->PreviousPosition) / UintSize;
+	WindFieldRenderData->SetTickData(*this,DeltaTime);
 	UKismetMaterialLibrary::SetVectorParameterValue(GetWorld(),WindFieldMaterialParameterCollection,FName("WindFieldPos"),FLinearColor(GetComponentLocation()));
-	WindFieldRenderManager->Render(*this);
-	PreviousWorldPosition = GetComponentLocation();
-	WindMotor->PreviousPosition = WindMotor->GetComponentLocation();
+	WindFieldRenderManager->Render(*WindFieldRenderData);
+	WindFieldRenderData->UpdatePreviousData();
 }
 

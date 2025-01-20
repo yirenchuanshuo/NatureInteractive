@@ -12,31 +12,31 @@ WindFieldRender::WindFieldRender()
 	ExportDataPass = MakeUnique<WindFieldExportDataPass>();
 }
 
-void WindFieldRender::Render(UWindFieldComponent& WindFieldComponent)const
+void WindFieldRender::Render(const FWindFieldRenderData& RenderData)const
 {
 	if(IsInRenderingThread())
 	{
 		FRHICommandListImmediate& RHICmdList = GetImmediateCommandList_ForRenderCommand();
-		Draw(RHICmdList,WindFieldComponent);
+		Draw(RHICmdList,RenderData);
 	}
 	else
 	{
 		ENQUEUE_RENDER_COMMAND(OceanRenderHZeroTextureCommand)(
-	[&WindFieldComponent,this](FRHICommandListImmediate& RHICmdList)
+	[&RenderData,this](FRHICommandListImmediate& RHICmdList)
 		{
-			Draw(RHICmdList,WindFieldComponent);
+			Draw(RHICmdList,RenderData);
 		});
 	}
 }
 
-void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const UWindFieldComponent& WindFieldComponent)const
+void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData)const
 {
-	OffsetPass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
-	AddSourcePass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
-	DiffusionPass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
-	AdvectPass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
-	ProjectPass->DrawFirst(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
-	ProjectPass->DrawSecond(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
-	ProjectPass->DrawThird(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
-	ExportDataPass->Draw(RHICommandList,WindFieldComponent,WindFieldComponent.WindFieldRenderData);
+	OffsetPass->Draw(RHICommandList,RenderData);
+	AddSourcePass->Draw(RHICommandList, RenderData);
+	DiffusionPass->Draw(RHICommandList, RenderData);
+	AdvectPass->Draw(RHICommandList, RenderData);
+	ProjectPass->DrawFirst(RHICommandList, RenderData);
+	ProjectPass->DrawSecond(RHICommandList, RenderData);
+	ProjectPass->DrawThird(RHICommandList, RenderData);
+	ExportDataPass->Draw(RHICommandList, RenderData);
 }

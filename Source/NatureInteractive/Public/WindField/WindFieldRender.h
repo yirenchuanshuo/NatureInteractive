@@ -12,8 +12,8 @@ class WindFieldRender
 {
 public:
 	WindFieldRender();
-	void Render(UWindFieldComponent& WindFieldDataComponent)const;
-	void Draw(FRHICommandListImmediate& RHICommandList,const UWindFieldComponent& WindFieldComponent)const;
+	void Render(const FWindFieldRenderData& RenderData)const;
+	void Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData)const;
 
 	TUniquePtr<WindFieldOffsetPass> OffsetPass;
 	TUniquePtr<WindFieldAddSourcePass> AddSourcePass;

@@ -3,6 +3,7 @@
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 #include "ShaderParameterStruct.h"
+#include "WindField/WindFieldRenderData.h"
 #include "WindField/WindFieldComponent.h"
 
 class FWindFieldComputeShader_AdvectCS : public FGlobalShader
@@ -41,14 +42,13 @@ class FWindFieldComputeShader_AdvectCS : public FGlobalShader
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_AdvectCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldAdvect.usf"), TEXT("WindFieldAdvectCS"), SF_Compute);
 
 
-void WindFieldAdvectPass::Draw(FRHICommandListImmediate& RHICommandList, const UWindFieldComponent& WindFieldComponent,
-	const FWindFieldRenderData& SetupData)
+void WindFieldAdvectPass::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData)
 {
 	FRDGBuilder GraphBuilder(RHICommandList);
 
-	FRDGTextureRef WindFieldDiffusionX = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_R1Resource->GetRenderTargetTexture(), TEXT("WindFieldDiffusionX"));
-	FRDGTextureRef WindFieldDiffusionY = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_G1Resource->GetRenderTargetTexture(), TEXT("WindFieldDiffusionY"));
-	FRDGTextureRef WindFieldDiffusionZ = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_B1Resource->GetRenderTargetTexture(), TEXT("WindFieldDiffusionZ"));
+	FRDGTextureRef WindFieldDiffusionX = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldDiffusionX"));
+	FRDGTextureRef WindFieldDiffusionY = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldDiffusionY"));
+	FRDGTextureRef WindFieldDiffusionZ = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldDiffusionZ"));
 	
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
 			FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
@@ -75,7 +75,7 @@ void WindFieldAdvectPass::Draw(FRHICommandListImmediate& RHICommandList, const U
 	WindFieldAdvectParameters->WindFieldAdvectY = WindFieldAdvectYUAV;
 	WindFieldAdvectParameters->WindFieldAdvectZ = WindFieldAdvectZUAV;
 	WindFieldAdvectParameters->NumCells = FVector3f(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
-	WindFieldAdvectParameters->DeltaTime = WindFieldComponent.DT;
+	WindFieldAdvectParameters->DeltaTime = SetupData.DeltaTime;
 	
 	
 	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_AdvectCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_AdvectCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_AdvectCS::ThreadZ);

@@ -3,6 +3,7 @@
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 #include "ShaderParameterStruct.h"
+#include "WindField/WindFieldRenderData.h"
 #include "WindField/WindFieldComponent.h"
 
 /*SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldVelocityX)
@@ -44,7 +45,7 @@ WindFieldExportDataPass::WindFieldExportDataPass()
 	
 }
 
-void WindFieldExportDataPass::Draw(FRHICommandListImmediate& RHICommandList,const UWindFieldComponent& WindFieldComponent,const FWindFieldRenderData& SetupData)
+void WindFieldExportDataPass::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData)
 {
 	FRDGBuilder GraphBuilder(RHICommandList);
 		
@@ -56,9 +57,9 @@ void WindFieldExportDataPass::Draw(FRHICommandListImmediate& RHICommandList,cons
 	FRDGTextureRef WindFieldVelocity = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldVelocity"));
 	FRDGTextureUAVRef WindFieldVelocityUAV = GraphBuilder.CreateUAV(WindFieldVelocity);
 
-	FRDGTextureRef WindFieldVelocityX = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_R1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityX"));
-	FRDGTextureRef WindFieldVelocityY = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_G1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityY"));
-	FRDGTextureRef WindFieldVelocityZ = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_B1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityZ"));
+	FRDGTextureRef WindFieldVelocityX = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldVelocityX"));
+	FRDGTextureRef WindFieldVelocityY = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldVelocityY"));
+	FRDGTextureRef WindFieldVelocityZ = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldVelocityZ"));
 
 	TShaderMapRef<FWindFieldComputeShader_DataExportCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
 	FWindFieldComputeShader_DataExportCS::FParameters* WindFieldDataExportParameters = GraphBuilder.AllocParameters<FWindFieldComputeShader_DataExportCS::FParameters>();
@@ -79,7 +80,7 @@ void WindFieldExportDataPass::Draw(FRHICommandListImmediate& RHICommandList,cons
 	});
 	
 	
-	FRDGTextureRef WindFieldVelocity_OutPut = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldVelocityResource->GetRenderTargetTexture(), TEXT("WindFieldVelocity_OutPut"));
+	FRDGTextureRef WindFieldVelocity_OutPut = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldVelocityOut->GetRenderTargetTexture(), TEXT("WindFieldVelocity_OutPut"));
 	
 	FRHICopyTextureInfo CopyInfo;
 	CopyInfo.Size = FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);

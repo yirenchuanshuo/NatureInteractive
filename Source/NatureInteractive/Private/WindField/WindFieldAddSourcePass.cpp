@@ -4,6 +4,7 @@
 #include "RenderGraphUtils.h"
 #include "ShaderParameterStruct.h"
 #include "WindField/WindFieldComponent.h"
+#include "WindField/WindFieldRenderData.h"
 #include "WindField/WindMotorComponent.h"
 
 class FWindFieldComputeShader_AddSourceCS : public FGlobalShader
@@ -46,14 +47,13 @@ class FWindFieldComputeShader_AddSourceCS : public FGlobalShader
 };
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_AddSourceCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldAddSource.usf"), TEXT("WindFieldAddSourceCS"), SF_Compute);
 
-void WindFieldAddSourcePass::Draw(FRHICommandListImmediate& RHICommandList,
-	const UWindFieldComponent& WindFieldComponent, const FWindFieldRenderData& SetupData)
+void WindFieldAddSourcePass::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData)
 {
 	FRDGBuilder GraphBuilder(RHICommandList);
 
-	FRDGTextureRef WindFieldSourceX_Previous = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_R1Resource->GetRenderTargetTexture(), TEXT("WindFieldSourceX_Previous"));
-	FRDGTextureRef WindFieldSourceY_Previous = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_G1Resource->GetRenderTargetTexture(), TEXT("WindFieldSourceY_Previous"));
-	FRDGTextureRef WindFieldSourceZ_Previous = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_B1Resource->GetRenderTargetTexture(), TEXT("WindFieldSourceZ_Previous"));
+	FRDGTextureRef WindFieldSourceX_Previous = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldSourceX_Previous"));
+	FRDGTextureRef WindFieldSourceY_Previous = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldSourceY_Previous"));
+	FRDGTextureRef WindFieldSourceZ_Previous = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldSourceZ_Previous"));
 	
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
 			FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
@@ -79,13 +79,13 @@ void WindFieldAddSourcePass::Draw(FRHICommandListImmediate& RHICommandList,
 	WindFieldAddSourceParameters->WindFieldSourceXOutput = WindFieldSourceXUAV;
 	WindFieldAddSourceParameters->WindFieldSourceYOutput = WindFieldSourceYUAV;
 	WindFieldAddSourceParameters->WindFieldSourceZOutput = WindFieldSourceZUAV;
-	WindFieldAddSourceParameters->WindFieldWorldPosition = FVector3f(WindFieldComponent.GetComponentLocation());
-	WindFieldAddSourceParameters->MotorWorldPosition =	FVector3f(WindFieldComponent.WindMotor->GetComponentLocation());
-	WindFieldAddSourceParameters->UnitSize = WindFieldComponent.UintSize;
-	WindFieldAddSourceParameters->HalfFieldSize = WindFieldComponent.WindFieldSize/2;
-	WindFieldAddSourceParameters->MotorForceDir = WindFieldComponent.WindMotor->MoveVelocity;
-	WindFieldAddSourceParameters->MotorIncidence = WindFieldComponent.WindMotor->Radius;
-	WindFieldAddSourceParameters->MotorForce = WindFieldComponent.WindMotor->Strength;
+	WindFieldAddSourceParameters->WindFieldWorldPosition = SetupData.WindFieldWorldPosition;
+	WindFieldAddSourceParameters->MotorWorldPosition =	SetupData.MotorWorldPosition;
+	WindFieldAddSourceParameters->UnitSize = SetupData.UintSize;
+	WindFieldAddSourceParameters->HalfFieldSize = SetupData.WindFieldSize/2;
+	WindFieldAddSourceParameters->MotorForceDir = SetupData.MotorMoveVelocity;
+	WindFieldAddSourceParameters->MotorIncidence = SetupData.MotorRadius;
+	WindFieldAddSourceParameters->MotorForce = SetupData.MotorStrength;
 	
 	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_AddSourceCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_AddSourceCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_AddSourceCS::ThreadZ);
 	GraphBuilder.AddPass(

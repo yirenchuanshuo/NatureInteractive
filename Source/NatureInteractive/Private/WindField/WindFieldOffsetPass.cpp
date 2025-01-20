@@ -4,6 +4,7 @@
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 #include "ShaderParameterStruct.h"
+#include "WindField/WindFieldRenderData.h"
 #include "WindField/WindFieldComponent.h"
 
 class FWindFieldComputeShader_OffsetCS : public FGlobalShader
@@ -41,14 +42,13 @@ class FWindFieldComputeShader_OffsetCS : public FGlobalShader
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_OffsetCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldOffset.usf"), TEXT("WindFieldOffsetCS"), SF_Compute);
 
 
-void WindFieldOffsetPass::Draw(FRHICommandListImmediate& RHICommandList, const UWindFieldComponent& WindFieldComponent,
-	const FWindFieldRenderData& SetupData)
+void WindFieldOffsetPass::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData)
 {
 	FRDGBuilder GraphBuilder(RHICommandList);
 
-	FRDGTextureRef WindFieldVelocityX_Input = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_R1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityX_Input"));
-	FRDGTextureRef WindFieldVelocityY_Input = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_G1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityY_Input"));
-	FRDGTextureRef WindFieldVelocityZ_Input = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_B1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityZ_Input"));
+	FRDGTextureRef WindFieldVelocityX_Input = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldVelocityX_Input"));
+	FRDGTextureRef WindFieldVelocityY_Input = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldVelocityY_Input"));
+	FRDGTextureRef WindFieldVelocityZ_Input = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldVelocityZ_Input"));
 	
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
 			FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
@@ -74,7 +74,7 @@ void WindFieldOffsetPass::Draw(FRHICommandListImmediate& RHICommandList, const U
 	WindFieldOffsetParameters->WindFieldVelocityXOutput = WindFieldVelocityX_OutputUAV;
 	WindFieldOffsetParameters->WindFieldVelocityYOutput = WindFieldVelocityY_OutputUAV;
 	WindFieldOffsetParameters->WindFieldVelocityZOutput = WindFieldVelocityZ_OutputUAV;
-	WindFieldOffsetParameters->MoveVelocity = WindFieldComponent.MoveVelocity;
+	WindFieldOffsetParameters->MoveVelocity = SetupData.WindFieldMoveVelocity;
 	
 	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_OffsetCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_OffsetCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_OffsetCS::ThreadZ);
 	GraphBuilder.AddPass(

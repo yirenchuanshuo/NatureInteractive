@@ -4,6 +4,7 @@
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 #include "ShaderParameterStruct.h"
+#include "WindField/WindFieldRenderData.h"
 #include "WindField/WindFieldComponent.h"
 
 
@@ -104,8 +105,7 @@ class FWindFieldComputeShader_ProjectThirdCS : public FGlobalShader
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_ProjectThirdCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldProjectContinue.usf"), TEXT("WindFieldProjectThirdCS"), SF_Compute);
 
 
-void WindFieldProjectPass::DrawFirst(FRHICommandListImmediate& RHICommandList, const UWindFieldComponent& WindFieldComponent,
-	const FWindFieldRenderData& SetupData)
+void WindFieldProjectPass::DrawFirst(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData)
 {
 	FRDGBuilder GraphBuilder(RHICommandList);
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
@@ -115,9 +115,9 @@ void WindFieldProjectPass::DrawFirst(FRHICommandListImmediate& RHICommandList, c
 	
 	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_ProjectFirstCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_ProjectFirstCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_ProjectFirstCS::ThreadZ);
 
-	FRDGTextureRef WindFieldVelocityXInput = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_R1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityXInput"));
-	FRDGTextureRef WindFieldVelocityYInput = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_G1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityYInput"));
-	FRDGTextureRef WindFieldVelocityZInput = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_B1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityZInput"));
+	FRDGTextureRef WindFieldVelocityXInput = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldVelocityXInput"));
+	FRDGTextureRef WindFieldVelocityYInput = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldVelocityYInput"));
+	FRDGTextureRef WindFieldVelocityZInput = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldVelocityZInput"));
 	
 	FRDGTextureRef WindFieldDivergence = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldDivergence"));
 	FRDGTextureUAVRef WindFieldDivergenceUAV = GraphBuilder.CreateUAV(WindFieldDivergence);
@@ -151,8 +151,7 @@ void WindFieldProjectPass::DrawFirst(FRHICommandListImmediate& RHICommandList, c
 	GraphBuilder.Execute();
 }
 
-void WindFieldProjectPass::DrawSecond(FRHICommandListImmediate& RHICommandList,
-	const UWindFieldComponent& WindFieldComponent, const FWindFieldRenderData& SetupData)
+void WindFieldProjectPass::DrawSecond(FRHICommandListImmediate& RHICommandList, const FWindFieldRenderData& SetupData)
 {
 	FRDGBuilder GraphBuilder(RHICommandList);
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
@@ -178,7 +177,7 @@ void WindFieldProjectPass::DrawSecond(FRHICommandListImmediate& RHICommandList,
 	FRHICopyTextureInfo CopyInfo;
 	CopyInfo.Size = FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
 	
-	for(int32 i=0;i<=WindFieldComponent.ProjectionPressureIterations;i++)
+	for(int32 i=0;i<=SetupData.ProjectionPressureIterations;i++)
 	{
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("WindFieldProjectSecondComputeShader"),
@@ -195,8 +194,7 @@ void WindFieldProjectPass::DrawSecond(FRHICommandListImmediate& RHICommandList,
 	GraphBuilder.Execute();
 }
 
-void WindFieldProjectPass::DrawThird(FRHICommandListImmediate& RHICommandList,
-	const UWindFieldComponent& WindFieldComponent, const FWindFieldRenderData& SetupData)
+void WindFieldProjectPass::DrawThird(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData)
 {
 	FRDGBuilder GraphBuilder(RHICommandList);
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
@@ -205,9 +203,9 @@ void WindFieldProjectPass::DrawThird(FRHICommandListImmediate& RHICommandList,
 				FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
 	
 	FRDGTextureRef WindFieldPressureThird = RegisterExternalTexture(GraphBuilder, WindFieldPressureThridRHI->GetRHI(), TEXT("WindFieldPressure"));
-	FRDGTextureRef WindFieldVelocityXInput = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_R1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityXInput"));
-	FRDGTextureRef WindFieldVelocityYInput = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_G1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityYInput"));
-	FRDGTextureRef WindFieldVelocityZInput = RegisterExternalTexture(GraphBuilder, WindFieldComponent.WindFieldChannel_B1Resource->GetRenderTargetTexture(), TEXT("WindFieldVelocityZInput"));
+	FRDGTextureRef WindFieldVelocityXInput = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldVelocityXInput"));
+	FRDGTextureRef WindFieldVelocityYInput = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldVelocityYInput"));
+	FRDGTextureRef WindFieldVelocityZInput = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldVelocityZInput"));
 
 	FRDGTextureRef WindFieldVelocityXOutput = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldVelocityXOutput"));
 	FRDGTextureUAVRef WindFieldVelocityXOutputUAV = GraphBuilder.CreateUAV(WindFieldVelocityXOutput);

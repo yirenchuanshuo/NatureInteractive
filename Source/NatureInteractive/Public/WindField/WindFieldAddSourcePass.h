@@ -1,10 +1,9 @@
 #pragma once
-#include "WindFieldCommonData.h"
-
 class UWindFieldComponent;
+class FWindFieldRenderData;
 
 class WindFieldAddSourcePass
 {
 public:
-	void Draw(FRHICommandListImmediate& RHICommandList, const UWindFieldComponent& WindFieldComponent,const FWindFieldRenderData& SetupData);
+	void Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData);
 };
