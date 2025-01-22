@@ -6,14 +6,15 @@
 #include "WindFieldExportDataPass.h"
 #include "WindFieldOffsetPass.h"
 
+class FWindMotorRenderDataManager;
 class UWindFieldComponent;
 
 class WindFieldRender
 {
 public:
 	WindFieldRender();
-	void Render(const FWindFieldRenderData& RenderData)const;
-	void Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData)const;
+	void Render(const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const;
+	void Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const;
 
 	TUniquePtr<WindFieldOffsetPass> OffsetPass;
 	TUniquePtr<WindFieldAddSourcePass> AddSourcePass;

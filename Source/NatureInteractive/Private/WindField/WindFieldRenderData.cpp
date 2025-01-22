@@ -2,19 +2,20 @@
 
 #include "Engine/TextureRenderTargetVolume.h"
 #include "WindField/WindFieldComponent.h"
-#include "WindField/WindMotorComponent.h"
+
+
+
+//WindFieldRenderData
 
 FWindFieldRenderData::FWindFieldRenderData()
 {
 }
 
-FWindFieldRenderData::FWindFieldRenderData(const UWindFieldComponent& WindFieldComponent)
-{	
-	SizeX = WindFieldComponent.TexResolution.X;
-	SizeY = WindFieldComponent.TexResolution.Y;
-	SizeZ = WindFieldComponent.TexResolution.Z;
-	OutputUAVFormat = PF_A32B32G32R32F;
-	FeatureLevel = ERHIFeatureLevel::SM5;
+FWindFieldRenderData::FWindFieldRenderData(const UWindFieldComponent& WindFieldComponent):
+SizeX(WindFieldComponent.TexResolution.X),
+SizeY(WindFieldComponent.TexResolution.Y),
+SizeZ(WindFieldComponent.TexResolution.Z)
+{
 }
 
 void FWindFieldRenderData::SetFeatureLevel(ERHIFeatureLevel::Type InFeatureLevel)
@@ -29,7 +30,7 @@ void FWindFieldRenderData::SetSizeData(const FIntVector& InSizeData)
 	SizeZ = InSizeData.Z;
 }
 
-void FWindFieldRenderData::SetData(const UWindFieldComponent& WindFieldComponent)
+void FWindFieldRenderData::InitData(const UWindFieldComponent& WindFieldComponent)
 {
 	SizeX = WindFieldComponent.TexResolution.X;
 	SizeY = WindFieldComponent.TexResolution.Y;
@@ -47,37 +48,22 @@ void FWindFieldRenderData::SetData(const UWindFieldComponent& WindFieldComponent
 	Diffusion = WindFieldComponent.Diffusion;
 	DiffusionIterations = WindFieldComponent.DiffusionIterations;
 	ProjectionPressureIterations = WindFieldComponent.ProjectionPressureIterations;
-	SetMotorData(*WindFieldComponent.WindMotor.Get());
 	
 	WindFieldWorldPosition = FVector3f(WindFieldComponent.GetComponentLocation());
 	WindFieldPreviousWorldPosition = WindFieldWorldPosition;
-
-	MotorWorldPosition = FVector3f(WindFieldComponent.WindMotor->GetComponentLocation());
-	MotorPreviousWorldPosition = MotorWorldPosition;
 }
 
-void FWindFieldRenderData::SetMotorData(const UWindMotorComponent& WindMotorComponent)
-{
-	MotorRadius = WindMotorComponent.Radius;
-	MotorStrength = WindMotorComponent.Strength;
-}
 
 void FWindFieldRenderData::SetTickData(const UWindFieldComponent& WindFieldComponent, float DT)
 {
 	WindFieldWorldPosition = FVector3f(WindFieldComponent.GetComponentLocation());
 	WindFieldMoveVelocity = (WindFieldWorldPosition - WindFieldPreviousWorldPosition) / UintSize;
 	this->DeltaTime = DT;
-	SetMotorTickData(*WindFieldComponent.WindMotor.Get());
-}
-
-void FWindFieldRenderData::SetMotorTickData(const UWindMotorComponent& WindMotorComponent)
-{
-	MotorWorldPosition = FVector3f(WindMotorComponent.GetComponentLocation());
-	MotorMoveVelocity = (MotorWorldPosition - MotorPreviousWorldPosition) / UintSize;
 }
 
 void FWindFieldRenderData::UpdatePreviousData()
 {
 	WindFieldPreviousWorldPosition = WindFieldWorldPosition;
-	MotorPreviousWorldPosition = MotorWorldPosition;
 }
+
+

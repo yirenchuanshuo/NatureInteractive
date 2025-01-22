@@ -4,9 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "WindField/WindFieldRender.h"
+#include "WindField/FWindMotorRenderData.h"
 #include "WindField.generated.h"
 
+class UWindMotorComponent;
 class UWindFieldComponent;
+
 
 UCLASS()
 class NATUREINTERACTIVE_API AWindField : public AActor
@@ -25,7 +29,17 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Wind Field")
+	void RegisterWindMotor(UWindMotorComponent* WindMotorComponent);
+	void UnregisterWindMotor(UWindMotorComponent* WindMotorComponent);
+
+	UFUNCTION(BlueprintCallable,Category = "WindField")
+	int32 DebugMotorCount()const { return WindMotorComponents.Num(); }
+
+	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly, Category = "Wind Field")
 	TObjectPtr<UWindFieldComponent> WindFieldComponent;
-	
+
+	TArray<UWindMotorComponent*>WindMotorComponents;
+
+	TUniquePtr<WindFieldRender> WindFieldRenderManager;
+	TUniquePtr<FWindMotorRenderDataManager> WindMotorRenderDataManager;
 };

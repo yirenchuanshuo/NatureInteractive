@@ -6,7 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "WindMotorComponent.generated.h"
 
-class UWindFieldComponent;
+class AWindField;
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class NATUREINTERACTIVE_API UWindMotorComponent : public USceneComponent
 {
@@ -19,6 +19,7 @@ public:
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:
 	// Called every frame
@@ -26,8 +27,14 @@ public:
 	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 public:
-	/*UPROPERTY(EditDefaultsOnly,Category = "WindField")
-	TSubclassOf<AActor> WindFieldActor;*/
+	UFUNCTION(BlueprintCallable,Category = "WindField")
+	void SetWindField(AWindField* InWindField);
+
+	UFUNCTION(BlueprintCallable,Category = "WindField")
+	void RegisterMotro();
+	
+	UPROPERTY()
+	TWeakObjectPtr<AWindField> WindField;
 
 	UPROPERTY(EditDefaultsOnly,Category = "WindMotor")
 	float Radius = 100.0f;
@@ -35,8 +42,10 @@ public:
 	UPROPERTY(EditDefaultsOnly,Category = "WindMotor")
 	float Strength = 10.0f;
 
+	
+	
 	FVector PreviousPosition = FVector(0.0f,0.0f,0.0f);
 	FVector3f MoveVelocity = FVector3f(0.0f,0.0f,0.0f);
 	
-	//TWeakObjectPtr<UWindFieldComponent> WindFieldComponent;
+	
 };

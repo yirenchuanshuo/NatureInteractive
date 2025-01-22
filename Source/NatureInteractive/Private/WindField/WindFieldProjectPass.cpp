@@ -5,7 +5,6 @@
 #include "RenderGraphUtils.h"
 #include "ShaderParameterStruct.h"
 #include "WindField/WindFieldRenderData.h"
-#include "WindField/WindFieldComponent.h"
 
 
 

@@ -4,11 +4,6 @@
 #include "RenderGraphUtils.h"
 #include "ShaderParameterStruct.h"
 #include "WindField/WindFieldRenderData.h"
-#include "WindField/WindFieldComponent.h"
-
-/*SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldVelocityX)
-		SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldVelocityY)
-		SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldVelocityZ)*/
 class FWindFieldComputeShader_DataExportCS : public FGlobalShader
 {
 	DECLARE_SHADER_TYPE(FWindFieldComputeShader_DataExportCS, Global);

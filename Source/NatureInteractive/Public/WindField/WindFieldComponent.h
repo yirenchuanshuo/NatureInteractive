@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "WindFieldRender.h"
+
 #include "WindFieldComponent.generated.h"
 
 
@@ -18,6 +18,11 @@ class NATUREINTERACTIVE_API UWindFieldComponent : public USceneComponent
 	GENERATED_BODY()
 
 public:
+
+	void InitRenderData()const;
+	void UpdateRenderData(float DeltaTime)const;
+	void UpdatePreviousRenderData()const;
+	
 	UPROPERTY(EditDefaultsOnly,Category = "WindField")
 	TObjectPtr<UTextureRenderTargetVolume> WindFieldChannel_R1;
 
@@ -32,9 +37,6 @@ public:
 
 	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData")
 	TObjectPtr<UMaterialParameterCollection> WindFieldMaterialParameterCollection;
-	
-	UPROPERTY(EditDefaultsOnly,Category = "WindMotor")
-	TSubclassOf<AActor> WindMotorActor;
 
 	UPROPERTY(EditDefaultsOnly,Category="WindFieldData")
 	float Diffusion;
@@ -51,9 +53,6 @@ public:
 	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData",meta = (ClampMin = "0", ClampMax = "30", UIMin = "0", UIMax = "30"))
 	int32 ProjectionPressureIterations;
 	
-	TWeakObjectPtr<UWindMotorComponent> WindMotor; 
-	
-	TUniquePtr<WindFieldRender> WindFieldRenderManager;
 	TSharedPtr<FWindFieldRenderData> WindFieldRenderData;
 
 public:

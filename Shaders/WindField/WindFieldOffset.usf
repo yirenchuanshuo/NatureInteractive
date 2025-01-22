@@ -12,8 +12,16 @@ float3 MoveVelocity;
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldOffsetCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	float3 pos = ThreadId.xyz;
-	float x = pos.x + MoveVelocity.x;
+	int3 pos = ThreadId.xyz;
+	int3 FinalPos = pos + int3(MoveVelocity);
+	int3 MaxSize;
+	WindFieldVelocityXOutput.GetDimensions(MaxSize.x, MaxSize.y, MaxSize.z);
+	FinalPos = max(min(FinalPos,MaxSize),0);
+
+	WindFieldVelocityXOutput[ThreadId] = WindFieldVelocityXInput[FinalPos];
+	WindFieldVelocityYOutput[ThreadId] = WindFieldVelocityYInput[FinalPos];
+	WindFieldVelocityZOutput[ThreadId] = WindFieldVelocityZInput[FinalPos];
+	/*float x = pos.x + MoveVelocity.x;
 	float y = pos.y + MoveVelocity.y;
 	float z = pos.z + MoveVelocity.z;
 
@@ -69,5 +77,5 @@ void WindFieldOffsetCS(uint3 ThreadId : SV_DispatchThreadID)
 
 	WindFieldVelocityXOutput[ThreadId] = V.x;
 	WindFieldVelocityYOutput[ThreadId] = V.y;
-	WindFieldVelocityZOutput[ThreadId] = V.z;
+	WindFieldVelocityZOutput[ThreadId] = V.z;*/
 }

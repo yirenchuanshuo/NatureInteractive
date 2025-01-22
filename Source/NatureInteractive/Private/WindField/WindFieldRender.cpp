@@ -1,6 +1,6 @@
 #include "WindField/WindFieldRender.h"
+#include "WindField/FWindMotorRenderData.h"
 
-#include "WindField/WindFieldComponent.h"
 
 WindFieldRender::WindFieldRender()
 {
@@ -12,27 +12,30 @@ WindFieldRender::WindFieldRender()
 	ExportDataPass = MakeUnique<WindFieldExportDataPass>();
 }
 
-void WindFieldRender::Render(const FWindFieldRenderData& RenderData)const
+void WindFieldRender::Render(const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const
 {
 	if(IsInRenderingThread())
 	{
 		FRHICommandListImmediate& RHICmdList = GetImmediateCommandList_ForRenderCommand();
-		Draw(RHICmdList,RenderData);
+		Draw(RHICmdList,RenderData,WindMotorRenderDataManager);
 	}
 	else
 	{
 		ENQUEUE_RENDER_COMMAND(OceanRenderHZeroTextureCommand)(
-	[&RenderData,this](FRHICommandListImmediate& RHICmdList)
+	[&RenderData,&WindMotorRenderDataManager,this](FRHICommandListImmediate& RHICmdList)
 		{
-			Draw(RHICmdList,RenderData);
+			Draw(RHICmdList,RenderData,WindMotorRenderDataManager);
 		});
 	}
 }
 
-void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData)const
+void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const
 {
 	OffsetPass->Draw(RHICommandList,RenderData);
-	AddSourcePass->Draw(RHICommandList, RenderData);
+	if(WindMotorRenderDataManager.WindMotorRenderDatasMap.Num() > 0)
+	{
+		AddSourcePass->Draw(RHICommandList,RenderData,WindMotorRenderDataManager);
+	}
 	DiffusionPass->Draw(RHICommandList, RenderData);
 	AdvectPass->Draw(RHICommandList, RenderData);
 	ProjectPass->DrawFirst(RHICommandList, RenderData);

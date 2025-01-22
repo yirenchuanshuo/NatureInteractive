@@ -1,5 +1,17 @@
 #include "/Engine/Private/Common.ush"
 
+struct FWindMotorData
+{
+	//MotorCommonData
+	float Radius;
+	float Strength;
+
+	//MotorTickData
+	float3 PreviousWorldPosition;
+	float3 WorldPosition;
+	float3 MoveVelocity;
+};
+
 Texture3D<float> WindFieldSourceXPrevious;
 Texture3D<float> WindFieldSourceYPrevious;
 Texture3D<float> WindFieldSourceZPrevious;
@@ -7,12 +19,11 @@ RWTexture3D<float> WindFieldSourceXOutput;
 RWTexture3D<float> WindFieldSourceYOutput;
 RWTexture3D<float> WindFieldSourceZOutput;
 float3 WindFieldWorldPosition;
-float3 MotorWorldPosition;
-float3 HalfFieldSize;
-float3 MotorForceDir;
-float MotorIncidence;
 float UnitSize;
-float MotorForce;
+uint MotorNum;
+
+
+StructuredBuffer<FWindMotorData> WindMotorBuffer;
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldAddSourceCS(uint3 ThreadId : SV_DispatchThreadID)
@@ -22,15 +33,22 @@ void WindFieldAddSourceCS(uint3 ThreadId : SV_DispatchThreadID)
 	float ZForce = WindFieldSourceZPrevious[ThreadId];
 	
 	float3 Position = ThreadId.xyz * UnitSize + WindFieldWorldPosition;
-	Position.xy -= HalfFieldSize.xy;
-	float3 ForceDir = Position - MotorWorldPosition;
-	float DistanceBetween = distance(Position, MotorWorldPosition);
-	float IsIncident = select(DistanceBetween<MotorIncidence, 1, 0);
-	float3 OutVelocity = select(DistanceBetween<MotorIncidence,MotorForceDir*MotorForce,float3(0,0,0));
-	
-	
-	WindFieldSourceXOutput[ThreadId] = XForce*(1-IsIncident) + OutVelocity.x;
-	WindFieldSourceYOutput[ThreadId] = YForce*(1-IsIncident) + OutVelocity.y;
-	WindFieldSourceZOutput[ThreadId] = ZForce*(1-IsIncident) + OutVelocity.z;
-	
+
+	for(uint i=0;i<MotorNum;i++)
+	{
+		float3 ForceDir = normalize(Position - WindMotorBuffer[i].WorldPosition);
+		float ForceLength = length(Position - WindMotorBuffer[i].WorldPosition);
+		float DistanceBetween = distance(Position, WindMotorBuffer[i].WorldPosition);
+		float IsIncident = select(DistanceBetween<WindMotorBuffer[i].Radius, 1, 0);
+		//float3 OutVelocity = select(DistanceBetween<WindMotorBuffer[i].Radius,WindMotorBuffer[i].MoveVelocity*WindMotorBuffer[i].Strength,float3(0,0,0));
+		float3 OutVelocity = select(ForceLength>1 && ForceLength<WindMotorBuffer[i].Radius,ForceDir*WindMotorBuffer[i].Strength,float3(0,0,0));
+
+		XForce += OutVelocity.x;
+		YForce += OutVelocity.y;
+		ZForce += OutVelocity.z;
+	}
+
+	WindFieldSourceXOutput[ThreadId] = XForce;
+	WindFieldSourceYOutput[ThreadId] = YForce;
+	WindFieldSourceZOutput[ThreadId] = ZForce;
 }

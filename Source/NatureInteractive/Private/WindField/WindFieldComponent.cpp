@@ -9,6 +9,8 @@
 #include "WindField/WindFieldRenderData.h"
 
 
+
+
 // Sets default values for this component's properties
 UWindFieldComponent::UWindFieldComponent()
 {
@@ -17,7 +19,6 @@ UWindFieldComponent::UWindFieldComponent()
 	PrimaryComponentTick.bCanEverTick = true;
 	
 	// ...
-	WindFieldRenderManager = MakeUnique<WindFieldRender>();
 	Diffusion = 2;
 	TexResolution = FIntVector(32,32,16);
 	WindFieldSize = FVector3f(3200,3200,1600);
@@ -31,27 +32,6 @@ UWindFieldComponent::UWindFieldComponent()
 void UWindFieldComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	
-	// ...
-	if (!WindMotorActor)
-	{
-		UE_LOG(LogTemp, Error, TEXT("WindMotorActor is not set"));
-		return;
-	}
-	
-	TArray<AActor*> WindMotorActors;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(),WindMotorActor,WindMotorActors);
-	
-	WindMotor = WindMotorActors[0]->FindComponentByClass<UWindMotorComponent>();
-	
-	WindFieldVelocity->UpdateResourceImmediate(false);
-	WindFieldChannel_R1->UpdateResourceImmediate(false);
-	WindFieldChannel_G1->UpdateResourceImmediate(false);
-	WindFieldChannel_B1->UpdateResourceImmediate(false);
-
-	WindFieldRenderData->SetData(*this);
-	
-	UKismetMaterialLibrary::SetVectorParameterValue(GetWorld(),WindFieldMaterialParameterCollection,FName("WindFieldSize"),FLinearColor(WindFieldSize));
 }
 
 void UWindFieldComponent::PostLoad()
@@ -86,14 +66,31 @@ void UWindFieldComponent::PostEditChangeProperty(FPropertyChangedEvent& Property
 	}
 }
 
+void UWindFieldComponent::InitRenderData()const
+{
+	WindFieldVelocity->UpdateResourceImmediate(false);
+	WindFieldChannel_R1->UpdateResourceImmediate(false);
+	WindFieldChannel_G1->UpdateResourceImmediate(false);
+	WindFieldChannel_B1->UpdateResourceImmediate(false);
+	
+	WindFieldRenderData->InitData(*this);
+	UKismetMaterialLibrary::SetVectorParameterValue(GetWorld(),WindFieldMaterialParameterCollection,FName("WindFieldSize"),FLinearColor(WindFieldSize));
+}
+
+void UWindFieldComponent::UpdateRenderData(float DeltaTime)const
+{
+	WindFieldRenderData->SetTickData(*this,DeltaTime);
+	UKismetMaterialLibrary::SetVectorParameterValue(GetWorld(),WindFieldMaterialParameterCollection,FName("WindFieldPos"),FLinearColor(GetComponentLocation()));
+}
+
+void UWindFieldComponent::UpdatePreviousRenderData() const
+{
+	WindFieldRenderData->UpdatePreviousData();
+}
 
 // Called every frame
 void UWindFieldComponent::TickComponent(float DeltaTime, ELevelTick TickType,FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	WindFieldRenderData->SetTickData(*this,DeltaTime);
-	UKismetMaterialLibrary::SetVectorParameterValue(GetWorld(),WindFieldMaterialParameterCollection,FName("WindFieldPos"),FLinearColor(GetComponentLocation()));
-	WindFieldRenderManager->Render(*WindFieldRenderData);
-	WindFieldRenderData->UpdatePreviousData();
 }
 
