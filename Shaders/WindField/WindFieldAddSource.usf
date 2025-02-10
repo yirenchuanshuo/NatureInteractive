@@ -40,8 +40,7 @@ void WindFieldAddSourceCS(uint3 ThreadId : SV_DispatchThreadID)
 		float3 ForceDir = normalize(Position - WindMotorBuffer[i].WorldPosition);
 		float ForceLength = length(Position - WindMotorBuffer[i].WorldPosition);
 		float IsIncident = select(ForceLength<WindMotorBuffer[i].Radius, 1, 0);
-		//float3 OutVelocity = select(DistanceBetween<WindMotorBuffer[i].Radius,WindMotorBuffer[i].MoveVelocity*WindMotorBuffer[i].Strength,float3(0,0,0));
-		float3 OutVelocity = select(ForceLength>1 && ForceLength<WindMotorBuffer[i].Radius,ForceDir*WindMotorBuffer[i].Strength,float3(0,0,0));
+		float3 OutVelocity = select(ForceLength<WindMotorBuffer[i].Radius,ForceDir*WindMotorBuffer[i].Strength,float3(0,0,0));
 
 		XForce += OutVelocity.x * DeltaTime;
 		YForce += OutVelocity.y * DeltaTime;
