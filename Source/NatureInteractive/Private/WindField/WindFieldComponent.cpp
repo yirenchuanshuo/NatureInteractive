@@ -68,10 +68,10 @@ void UWindFieldComponent::PostEditChangeProperty(FPropertyChangedEvent& Property
 
 void UWindFieldComponent::InitRenderData()const
 {
-	WindFieldVelocity->UpdateResourceImmediate(false);
-	WindFieldChannel_R1->UpdateResourceImmediate(false);
-	WindFieldChannel_G1->UpdateResourceImmediate(false);
-	WindFieldChannel_B1->UpdateResourceImmediate(false);
+	WindFieldVelocity->UpdateResourceImmediate(true);
+	WindFieldChannel_R1->UpdateResourceImmediate(true);
+	WindFieldChannel_G1->UpdateResourceImmediate(true);
+	WindFieldChannel_B1->UpdateResourceImmediate(true);
 	
 	WindFieldRenderData->InitData(*this);
 	UKismetMaterialLibrary::SetVectorParameterValue(GetWorld(),WindFieldMaterialParameterCollection,FName("WindFieldSize"),FLinearColor(WindFieldSize));

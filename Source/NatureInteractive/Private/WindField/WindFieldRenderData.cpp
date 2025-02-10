@@ -58,7 +58,7 @@ void FWindFieldRenderData::SetTickData(const UWindFieldComponent& WindFieldCompo
 {
 	WindFieldWorldPosition = FVector3f(WindFieldComponent.GetComponentLocation());
 	WindFieldMoveVelocity = (WindFieldWorldPosition - WindFieldPreviousWorldPosition) / UintSize;
-	this->DeltaTime = DT;
+	this->DeltaTime = 0.017;
 }
 
 void FWindFieldRenderData::UpdatePreviousData()

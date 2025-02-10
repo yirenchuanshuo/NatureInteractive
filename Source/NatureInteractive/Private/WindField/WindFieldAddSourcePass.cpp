@@ -23,6 +23,7 @@ class FWindFieldComputeShader_AddSourceCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FWindMotorRenderData>, WindMotorBuffer)
 		SHADER_PARAMETER(FVector3f,WindFieldWorldPosition)
 		SHADER_PARAMETER(float,UnitSize)
+		SHADER_PARAMETER(float,DeltaTime)
 		SHADER_PARAMETER(UINT,MotorNum)
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -87,6 +88,7 @@ void WindFieldAddSourcePass::Draw(FRHICommandListImmediate& RHICommandList,const
 	WindFieldAddSourceParameters->WindFieldWorldPosition = SetupData.WindFieldWorldPosition - SetupData.WindFieldSize/2;
 	WindFieldAddSourceParameters->WindMotorBuffer = GraphBuilder.CreateSRV(WindMotorBuffer);
 	WindFieldAddSourceParameters->UnitSize = SetupData.UintSize;
+	WindFieldAddSourceParameters->DeltaTime = SetupData.DeltaTime;
 	WindFieldAddSourceParameters->MotorNum = WindMotorRenderDatas.Num();
 	
 	
