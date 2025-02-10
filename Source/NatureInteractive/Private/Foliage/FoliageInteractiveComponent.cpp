@@ -27,6 +27,7 @@ void UFoliageInteractiveComponent::TickComponent(float DeltaTime, ELevelTick Tic
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	MoveVelocity = (GetComponentLocation()-PreviousPosition)/DeltaTime;
+	UKismetMaterialLibrary::SetVectorParameterValue(GetWorld(),FoliageInteractiveMaterialParameterCollection,FName("CharacterPos"),FLinearColor(GetComponentLocation()));
 	PreviousPosition = GetComponentLocation();
 }
 

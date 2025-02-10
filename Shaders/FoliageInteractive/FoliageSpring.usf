@@ -1,0 +1,12 @@
+#include "/Engine/Private/Common.ush"
+RWTexture2D<float4> FoliageSpringLevel0;
+RWTexture2D<float4> FoliageSpringLevel1;
+float Height;
+
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void InitSpringCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	FoliageSpringLevel0[ThreadId.xy] = Height;
+	FoliageSpringLevel1[ThreadId.xy] = Height;
+}
