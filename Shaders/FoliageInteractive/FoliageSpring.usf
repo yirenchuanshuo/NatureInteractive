@@ -1,12 +1,70 @@
 #include "/Engine/Private/Common.ush"
-RWTexture2D<float4> FoliageSpringLevel0;
-RWTexture2D<float4> FoliageSpringLevel1;
-float Height;
 
+RWTexture2D<float4> FoliageSpringLevel0Offset;
+RWTexture2D<float4> FoliageSpringLevel1Offset;
+
+Texture2D FoliageSpringLevelParentOffsetInput;
+Texture2D FoliageSpringLevelOffsetInput;
+Texture2D FoliageSpringLevelVelocityInput;
+
+RWTexture2D<float4> FoliageSpringLevelVelocity;
+RWTexture2D<float4> FoliageSpringLevelOffset;
+float Height;
+float DeltaTime;
+float k;
+float l;
+float m;
+float sf;
+
+float3 CollisionPosition;
+float CollisionRadius;
+float SimulationSize;
+
+
+float3 HukeLaw(float3 Pos0, float3 Pos1, float k , float l)
+{
+	float3 v = Pos0 - Pos1;
+	float dis = length(v);
+	float3 dir = v / dis;
+	return (dis - l) * k * dir;
+}
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void InitSpringCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	FoliageSpringLevel0[ThreadId.xy] = Height;
-	FoliageSpringLevel1[ThreadId.xy] = Height;
+	FoliageSpringLevel0Offset[ThreadId.xy] = float4(0,0,Height,1);
+	FoliageSpringLevel1Offset[ThreadId.xy] = float4(0,0,Height*2,1);
+}
+
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void SimSpringCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	float3 Pos0 = FoliageSpringLevelParentOffsetInput[ThreadId.xy].xyz;
+	float3 Pos1 = FoliageSpringLevelOffsetInput[ThreadId.xy].xyz;
+	float3 Vel = FoliageSpringLevelVelocityInput[ThreadId.xy].xyz;
+
+	float3 f0 = HukeLaw(Pos0, Pos1, k, l);
+	float3 f = f0 + sf * float3(0,0,1);
+	float3 a = f / m;
+	float3 v = Vel + a * DeltaTime;
+	float3 pos = Pos1 + v * DeltaTime;
+	v*=0.99;
+
+	FoliageSpringLevelOffset[ThreadId.xy] = float4(pos, 1);
+	FoliageSpringLevelVelocity[ThreadId.xy] = float4(v, 1);
+}
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void CollisionSpringCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	float3 IDPos = float3(ThreadId.xy, 0) - float3(SimulationSize/2, SimulationSize/2, CollisionPosition.z);
+	
+	float3 Pos1 = FoliageSpringLevelOffsetInput[ThreadId.xy].xyz;
+
+	float3 dir = normalize(Pos1-IDPos);
+	float dis = length(Pos1-IDPos);
+
+	Pos1 = select(dis < CollisionRadius,IDPos + dir * CollisionRadius,Pos1);
+	FoliageSpringLevelOffset[ThreadId.xy] = float4(Pos1, 1);
 }
