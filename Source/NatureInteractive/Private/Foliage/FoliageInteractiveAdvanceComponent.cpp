@@ -2,22 +2,23 @@
 
 
 #include "Foliage/FoliageInteractiveAdvanceComponent.h"
-
 #include "Engine/TextureRenderTarget2D.h"
-#include "Kismet/KismetMaterialLibrary.h"
-#include "Kismet/KismetRenderingLibrary.h"
+#include "Foliage/FoliageInteractiveRender.h"
+#include "Foliage/FoliageInteractiveRenderData.h"
+
+
 
 
 // Sets default values for this component's properties
 UFoliageInteractiveAdvanceComponent::UFoliageInteractiveAdvanceComponent()
-	:SpringPointDeltaHeight(10.f),SpringPointK(1.f),SpringPointL(1.f),SpringPointM(1.f),SpringPointSF(1.f),
-	InteractiveSize(500.f),SpringAttenuation(1.f),SimIteration(5)
+	:SpringClampNormal(FVector3f(0,0,1)),SpringDeltaLength(50.f),SpringStiffness(10.f),SpringElasticity(0.5f)
 {
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = true;
-	CollisionOffset = FVector3f(0.f,0.f,0.f);
 	// ...
+	FoliageInteractiveRender = MakeUnique<FFoliageInteractiveRender>();
+	InitData = MakeShared<FFoliageInteractiveInitData>();
 }
 
 
@@ -25,13 +26,8 @@ UFoliageInteractiveAdvanceComponent::UFoliageInteractiveAdvanceComponent()
 void UFoliageInteractiveAdvanceComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	InitBrush();
-	
-	InitHeight();
-	
-	InitSimRenderData();
-
-	InitCollisionRenderData();
+	InitRender();
+	FoliageInteractiveRender->InitRender(*this);
 }
 
 void UFoliageInteractiveAdvanceComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -45,11 +41,6 @@ void UFoliageInteractiveAdvanceComponent::TickComponent(float DeltaTime, ELevelT
                                                         FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	for(int32 i=0;i<SimIteration;i++)
-	{
-		SimulationSpring(DeltaTime);
-	}
-	SimulationCollision(DeltaTime);
 }
 
 void UFoliageInteractiveAdvanceComponent::PostLoad()
@@ -57,95 +48,45 @@ void UFoliageInteractiveAdvanceComponent::PostLoad()
 	Super::PostLoad();
 }
 
-void UFoliageInteractiveAdvanceComponent::InitBrush()
+void UFoliageInteractiveAdvanceComponent::InitRender()
 {
-	UMaterialInstanceDynamic* InitHeightMaterialInstance = UKismetMaterialLibrary::CreateDynamicMaterialInstance(GetWorld(),InitHeightMaterial);
-	UMaterialInstanceDynamic* SimulationMaterialInstance = UKismetMaterialLibrary::CreateDynamicMaterialInstance(GetWorld(),SimulationMaterial);
-	UMaterialInstanceDynamic* CollisionMaterialInstance = UKismetMaterialLibrary::CreateDynamicMaterialInstance(GetWorld(),CollisionMaterial);
-	DrawBrushMap.Add(FName(TEXT("InitHeight")),InitHeightMaterialInstance);
-	DrawBrushMap.Add(FName(TEXT("Simulation")),SimulationMaterialInstance);
-	DrawBrushMap.Add(FName(TEXT("Collision")),CollisionMaterialInstance);
+	InitData->SpringBaseSegment = FoliageSpringBase->GameThread_GetRenderTargetResource();
+	InitData->SpringBaseSegmentVelocity = FoliageSpringBaseVelocity->GameThread_GetRenderTargetResource();
+	InitData->SpringBaseSegmentDirection = FoliageSpringBaseDirection->GameThread_GetRenderTargetResource();
+	InitData->SpringTipSegment = FoliageSpringTip->GameThread_GetRenderTargetResource();
+	InitData->SpringTipSegmentVelocity = FoliageSpringTipVelocity->GameThread_GetRenderTargetResource();
+	InitData->SpringTipSegmentDirection = FoliageSpringTipDirection->GameThread_GetRenderTargetResource();
+	InitData->SetFeatureLevel(GetWorld()->GetFeatureLevel());
+	InitData->SizeX = FoliageSpringBase->SizeX;
+	InitData->SizeY = FoliageSpringBase->SizeY;
+	InitData->SpringClampNormal = SpringClampNormal;
+	InitData->SpringDeltaLength = SpringDeltaLength;
+	InitData->SpringStiffness = SpringStiffness;
+	InitData->SpringElasticity = SpringElasticity;
 }
 
 void UFoliageInteractiveAdvanceComponent::InitHeight()
 {
-	int32 SpringLevelNums = FoliageSpringLevelOffset.Num();
-	UMaterialInstanceDynamic* InitHeightMaterialInstance = DrawBrushMap.FindRef(FName(TEXT("InitHeight")));
-	UWorld* World = GetWorld();
-	for(int32 i=0;i<SpringLevelNums;i++)
-	{
-		UKismetRenderingLibrary::ClearRenderTarget2D(World,FoliageSpringLevelOffset[i],FLinearColor::Black);
-		InitHeightMaterialInstance->SetScalarParameterValue(FName(TEXT("Height")),SpringPointDeltaHeight*(i+1));
-		UKismetRenderingLibrary::DrawMaterialToRenderTarget(World,FoliageSpringLevelOffset[i],InitHeightMaterialInstance);
-	}
+	
 }
 
 void UFoliageInteractiveAdvanceComponent::InitSimRenderData()
 {
-	UWorld* World = GetWorld();
-
-	UKismetMaterialLibrary::SetScalarParameterValue(World,FoliageInteractiveMaterialParameterCollection,TEXT("SpringSize"),InteractiveSize);
-	UKismetMaterialLibrary::SetScalarParameterValue(World,FoliageInteractiveMaterialParameterCollection,TEXT("SpringAttenuation"),SpringAttenuation);
-	UKismetMaterialLibrary::SetScalarParameterValue(World,FoliageInteractiveMaterialParameterCollection,TEXT("SpringDeltaHeight"),SpringPointDeltaHeight);
-
-	UMaterialInstanceDynamic* SimulationMaterialInstance = DrawBrushMap.FindRef(FName(TEXT("Simulation")));
-	SimulationMaterialInstance->SetScalarParameterValue(TEXT("k"),SpringPointK);
-	SimulationMaterialInstance->SetScalarParameterValue(TEXT("l"),SpringPointL);
-	SimulationMaterialInstance->SetScalarParameterValue(TEXT("m"),SpringPointM);
-	SimulationMaterialInstance->SetScalarParameterValue(TEXT("sf"),SpringPointSF);
-	SimulationMaterialInstance->SetScalarParameterValue(TEXT("IsV"),0);
+	
 }
 
 void UFoliageInteractiveAdvanceComponent::SimulationSpring(float DeltaTime)
 {
 	
-	UWorld* World = GetWorld();
-	UMaterialInstanceDynamic* SimulationMaterialInstance = DrawBrushMap.FindRef(FName(TEXT("Simulation")));
-
-	//1
-	SimulationMaterialInstance->SetTextureParameterValue(TEXT("p0"),FoliageSpringLevelRoot);
-	SimulationMaterialInstance->SetTextureParameterValue(TEXT("p1"),FoliageSpringLevelOffset[0]);
-	SimulationMaterialInstance->SetTextureParameterValue(TEXT("v1"),FoliageSpringLevelVelocity[0]);
-	SimulationMaterialInstance->SetScalarParameterValue(TEXT("dt"),DeltaTime);
-	UKismetRenderingLibrary::DrawMaterialToRenderTarget(World,FoliageSpringLevelOffset[0],SimulationMaterialInstance);
-	SimulationMaterialInstance->SetScalarParameterValue(TEXT("IsV"),1);
-	UKismetRenderingLibrary::DrawMaterialToRenderTarget(World,FoliageSpringLevelVelocity[0],SimulationMaterialInstance);
-
-	//2
-	SimulationMaterialInstance->SetTextureParameterValue(TEXT("p0"),FoliageSpringLevelOffset[0]);
-	SimulationMaterialInstance->SetTextureParameterValue(TEXT("p1"),FoliageSpringLevelOffset[1]);
-	SimulationMaterialInstance->SetTextureParameterValue(TEXT("v1"),FoliageSpringLevelVelocity[1]);
-	SimulationMaterialInstance->SetScalarParameterValue(TEXT("dt"),DeltaTime);
-	UKismetRenderingLibrary::DrawMaterialToRenderTarget(World,FoliageSpringLevelOffset[1],SimulationMaterialInstance);
-	SimulationMaterialInstance->SetScalarParameterValue(TEXT("IsV"),1);
-	UKismetRenderingLibrary::DrawMaterialToRenderTarget(World,FoliageSpringLevelVelocity[1],SimulationMaterialInstance);
 }
 
 void UFoliageInteractiveAdvanceComponent::InitCollisionRenderData()
 {
-	UMaterialInstanceDynamic* CollisionMaterialInstance = DrawBrushMap.FindRef(FName(TEXT("Collision")));
-	CollisionMaterialInstance->SetScalarParameterValue(TEXT("r"),CollisionRadius);
-	CollisionMaterialInstance->SetScalarParameterValue(TEXT("size"),CollisionSimSize);
-	CollisionMaterialInstance->SetVectorParameterValue(TEXT("P"),GetComponentLocation());
+	
 }
 
 void UFoliageInteractiveAdvanceComponent::SimulationCollision(float DeltaTime)
 {
-	UWorld* World = GetWorld();
-	UMaterialInstanceDynamic* CollisionMaterialInstance = DrawBrushMap.FindRef(FName(TEXT("Collision")));
-
-	//1
-	CollisionMaterialInstance->SetTextureParameterValue(TEXT("p0"),FoliageSpringLevelRoot);
-	CollisionMaterialInstance->SetTextureParameterValue(TEXT("p1"),FoliageSpringLevelOffset[0]);
-	CollisionMaterialInstance->SetScalarParameterValue(TEXT("dt"),DeltaTime);
-	CollisionMaterialInstance->SetVectorParameterValue(TEXT("P"),GetComponentLocation() + FVector(CollisionOffset));
-	UKismetRenderingLibrary::DrawMaterialToRenderTarget(World,FoliageSpringLevelOffset[0],CollisionMaterialInstance);
-
-	//2
-	CollisionMaterialInstance->SetTextureParameterValue(TEXT("p0"),FoliageSpringLevelOffset[0]);
-	CollisionMaterialInstance->SetTextureParameterValue(TEXT("p1"),FoliageSpringLevelOffset[1]);
-	CollisionMaterialInstance->SetScalarParameterValue(TEXT("dt"),DeltaTime);
-	CollisionMaterialInstance->SetVectorParameterValue(TEXT("P"),GetComponentLocation() + FVector(CollisionOffset));
-	UKismetRenderingLibrary::DrawMaterialToRenderTarget(World,FoliageSpringLevelOffset[1],CollisionMaterialInstance);
+	
 }
 

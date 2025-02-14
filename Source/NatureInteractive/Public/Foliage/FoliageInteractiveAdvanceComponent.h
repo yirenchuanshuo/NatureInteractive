@@ -3,9 +3,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "FoliageInteractiveRender.h"
 #include "Components/SceneComponent.h"
 #include "FoliageInteractiveAdvanceComponent.generated.h"
 
+
+
+struct FFoliageInteractiveInitData;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class NATUREINTERACTIVE_API UFoliageInteractiveAdvanceComponent : public USceneComponent
@@ -28,7 +32,7 @@ public:
 	virtual void PostLoad() override;
 
 public:
-	void InitBrush();
+	void InitRender();
 	void InitHeight();
 	void InitSimRenderData();
 	void SimulationSpring(float DeltaTime);
@@ -39,56 +43,39 @@ public:
 	TObjectPtr<UMaterialParameterCollection> FoliageInteractiveMaterialParameterCollection;
 
 	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive")
-	TArray<TObjectPtr<UTextureRenderTarget2D>> FoliageSpringLevelOffset;
+	TObjectPtr<UTextureRenderTarget2D> FoliageSpringBase;
 
 	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive")
-	TArray<TObjectPtr<UTextureRenderTarget2D>> FoliageSpringLevelVelocity;
+	TObjectPtr<UTextureRenderTarget2D> FoliageSpringBaseVelocity;
 
+	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive")
+	TObjectPtr<UTextureRenderTarget2D> FoliageSpringBaseDirection;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "FoliageInteractive")
+	TObjectPtr<UTextureRenderTarget2D> FoliageSpringTip;
+
+	UPROPERTY(EditDefaultsOnly, Category = "FoliageInteractive")
+	TObjectPtr<UTextureRenderTarget2D> FoliageSpringTipVelocity;
+
+	UPROPERTY(EditDefaultsOnly, Category = "FoliageInteractive")
+	TObjectPtr<UTextureRenderTarget2D> FoliageSpringTipDirection;
+	
 	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive")
 	TObjectPtr<UTexture2D> FoliageSpringLevelRoot;
 
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive")
-	TObjectPtr<UMaterialInterface> InitHeightMaterial;
-
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive")
-	TObjectPtr<UMaterialInterface> SimulationMaterial;
-
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive")
-	TObjectPtr<UMaterialInterface> CollisionMaterial;
+	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
+	FVector3f SpringClampNormal;
 
 	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
-	float SpringPointDeltaHeight;
+	float SpringDeltaLength;
 
 	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
-	float SpringPointK;
+	float SpringStiffness;
 
 	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
-	float SpringPointL;
+	float SpringElasticity;
 
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
-	float SpringPointM;
-
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
-	float SpringPointSF;
-
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
-	float InteractiveSize;
-
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
-	float SpringAttenuation;
-
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
-	int32 SimIteration;
 	
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Collision")
-	float CollisionRadius;
-
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Collision")
-	float CollisionSimSize;
-
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Collision")
-	FVector3f CollisionOffset;
-
-	UPROPERTY()
-	TMap<FName,UMaterialInstanceDynamic*> DrawBrushMap;
+	TUniquePtr<FFoliageInteractiveRender> FoliageInteractiveRender;
+	TSharedPtr<FFoliageInteractiveInitData> InitData;
 };

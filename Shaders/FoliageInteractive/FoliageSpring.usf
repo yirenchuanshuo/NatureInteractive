@@ -1,39 +1,63 @@
 #include "/Engine/Private/Common.ush"
 
-RWTexture2D<float4> FoliageSpringLevel0Offset;
-RWTexture2D<float4> FoliageSpringLevel1Offset;
+RWTexture2D<float4> SpringBaseOutput;
+RWTexture2D<float4> SpringBaseVelocityOutput;
+RWTexture2D<float4> SpringBaseDirectionOutput;
+RWTexture2D<float4> SpringTipOutput;
+RWTexture2D<float4> SpringTipVelocityOutput;
+RWTexture2D<float4> SpringTipDirectionOutput;
 
-Texture2D FoliageSpringLevelParentOffsetInput;
-Texture2D FoliageSpringLevelOffsetInput;
-Texture2D FoliageSpringLevelVelocityInput;
 
-RWTexture2D<float4> FoliageSpringLevelVelocity;
-RWTexture2D<float4> FoliageSpringLevelOffset;
-float Height;
+float3 SpringClampNormal;
+float SpringDeltaLength;
 float DeltaTime;
-float k;
-float l;
-float m;
-float sf;
-
-float3 CollisionPosition;
-float CollisionRadius;
-float SimulationSize;
+float SpringStiffness;
+float SpringElasticity;
 
 
-float3 HukeLaw(float3 Pos0, float3 Pos1, float k , float l)
+
+
+
+void SimSpring(in out float3 Spring, in out float3 SpringVelocity, in out float3 SpringDirection,float3 SpringForce , float3 GridPosition ,float3 SpringRootPosition, float3 Direction)
 {
-	float3 v = Pos0 - Pos1;
-	float dis = length(v);
-	float3 dir = v / dis;
-	return (dis - l) * k * dir;
+	float3 TargetSpring = SpringRootPosition + Direction * SpringDeltaLength;
+	float3 SpringDelta = TargetSpring - Spring;
+	float SpringLength = length(SpringDelta);
+	SpringDirection = normalize(SpringDelta);
+
+	SpringVelocity += (SpringForce - SpringDirection * SpringStiffness * (SpringLength - SpringDeltaLength)) * DeltaTime * SpringElasticity;
+	Spring += SpringVelocity * DeltaTime;
+	
+	float ClampDelta = dot(Spring, SpringClampNormal) - dot(GridPosition, SpringClampNormal);
+	Spring = select(ClampDelta < 0, Spring - SpringClampNormal * ClampDelta, Spring);
+
+	SpringDelta = Spring-SpringRootPosition;
+	SpringDirection = normalize(SpringDelta);
+	Spring = SpringDirection * SpringDeltaLength + SpringRootPosition;
+	
 }
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void InitSpringCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	FoliageSpringLevel0Offset[ThreadId.xy] = float4(0,0,Height,1);
-	FoliageSpringLevel1Offset[ThreadId.xy] = float4(0,0,Height*2,1);
+	float3 GridPosition = float3(ThreadId.xy, 0);
+	
+	float3 SpringBaseVelocity = float3(0,0,0);
+	float3 SpringBaseDirection = float3(0,0,1);
+	float3 SpringBase = GridPosition + float3(0,0,1) * SpringDeltaLength;
+
+	SimSpring(SpringBase, SpringBaseVelocity, SpringBaseDirection, float3(0,0,0), GridPosition,GridPosition,float3(0,0,1));
+	SpringBaseOutput[ThreadId.xy] = float4(SpringBase, 1);
+	SpringBaseVelocityOutput[ThreadId.xy] = float4(SpringBaseVelocity, 1);
+	SpringBaseDirectionOutput[ThreadId.xy] = float4(SpringBaseDirection, 1);
+	
+	float3 SpringTip = GridPosition + float3(0,0,1) * SpringDeltaLength;
+	float3 SpringTipVelocity = float3(0,0,1);
+	float3 SpringTipDirection = float3(0,0,1);
+	SimSpring(SpringTip, SpringTipVelocity, SpringTipDirection, float3(0,0,0), GridPosition,SpringBase,SpringBaseDirection);
+	SpringTipOutput[ThreadId.xy] = float4(SpringTip, 1);
+	SpringTipVelocityOutput[ThreadId.xy] = float4(SpringTipVelocity, 1);
+	SpringTipDirectionOutput[ThreadId.xy] = float4(SpringTipDirection, 1);
 }
 
 
