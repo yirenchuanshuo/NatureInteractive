@@ -1,4 +1,5 @@
 #include "Foliage/FoliageInteractiveRender.h"
+
 #include "Foliage/FoliageInteractiveAdvanceComponent.h"
 
 FFoliageInteractiveRender::FFoliageInteractiveRender()
@@ -7,7 +8,7 @@ FFoliageInteractiveRender::FFoliageInteractiveRender()
 }
 
 void FFoliageInteractiveRender::InitRender(
-	const UFoliageInteractiveAdvanceComponent& FoliageInteractiveAdvanceComponent)
+	const UFoliageInteractiveAdvanceComponent& FoliageInteractiveAdvanceComponent) const
 {
 	if(IsInRenderingThread())
 	{
@@ -25,12 +26,12 @@ void FFoliageInteractiveRender::InitRender(
 }
 
 void FFoliageInteractiveRender::InitDraw(FRHICommandListImmediate& RHICommandList,
-                                         const UFoliageInteractiveAdvanceComponent& FoliageInteractiveAdvanceComponent)
+                                         const UFoliageInteractiveAdvanceComponent& FoliageInteractiveAdvanceComponent) const
 {
 	InitPass->Draw(RHICommandList,FoliageInteractiveAdvanceComponent.InitData.Get());
 }
 
-void FFoliageInteractiveRender::Render(const UFoliageInteractiveAdvanceComponent& FoliageInteractiveAdvanceComponent)
+void FFoliageInteractiveRender::Render(const UFoliageInteractiveAdvanceComponent& FoliageInteractiveAdvanceComponent) const
 {
 	if(IsInRenderingThread())
 	{
@@ -48,7 +49,7 @@ void FFoliageInteractiveRender::Render(const UFoliageInteractiveAdvanceComponent
 }
 
 void FFoliageInteractiveRender::Draw(FRHICommandListImmediate& RHICommandList,
-	const UFoliageInteractiveAdvanceComponent& FoliageInteractiveAdvanceComponent)
+	const UFoliageInteractiveAdvanceComponent& FoliageInteractiveAdvanceComponent) const
 {
-	
+	SimulationPass->Draw(RHICommandList,FoliageInteractiveAdvanceComponent.SimulationData.Get());
 }

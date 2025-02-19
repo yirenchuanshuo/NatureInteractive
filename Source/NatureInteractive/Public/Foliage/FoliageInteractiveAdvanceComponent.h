@@ -9,7 +9,8 @@
 
 
 
-struct FFoliageInteractiveInitData;
+class FFoliageInteractiveInitData;
+class FFoliageInteractiveSimulationData;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class NATUREINTERACTIVE_API UFoliageInteractiveAdvanceComponent : public USceneComponent
@@ -32,10 +33,9 @@ public:
 	virtual void PostLoad() override;
 
 public:
-	void InitRender();
-	void InitHeight();
-	void InitSimRenderData();
-	void SimulationSpring(float DeltaTime);
+	void InitRender() const;
+	void InitSimRenderData() const;
+	void SimulationSpring(float DeltaTime) const;
 	void InitCollisionRenderData();
 	void SimulationCollision(float DeltaTime);
 
@@ -63,19 +63,26 @@ public:
 	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive")
 	TObjectPtr<UTexture2D> FoliageSpringLevelRoot;
 
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
+	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Init")
 	FVector3f SpringClampNormal;
 
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
+	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Init")
 	float SpringDeltaLength;
 
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
+	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Init")
 	float SpringStiffness;
 
-	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
+	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Init")
 	float SpringElasticity;
 
+	UPROPERTY(EditDefaultsOnly,Category = "FoliageInteractive Simulation")
+	float CollisionRadius;
+
+	FVector3f PreviousPosition;
 	
 	TUniquePtr<FFoliageInteractiveRender> FoliageInteractiveRender;
 	TSharedPtr<FFoliageInteractiveInitData> InitData;
+	TSharedPtr<FFoliageInteractiveSimulationData> SimulationData;
+
+	
 };

@@ -1,6 +1,6 @@
 #pragma once
 
-struct FFoliageInteractiveInitData;
+class FFoliageInteractiveInitData;
 
 class FFoliageInteractiveInitPass
 {

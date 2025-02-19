@@ -83,7 +83,7 @@ void FFoliageInteractiveInitPass::Draw(FRHICommandListImmediate& RHICommandList,
 	SpringInitParameters->SpringTipVelocityOutput = SpringTipVelocityOutputUAV;
 	SpringInitParameters->SpringTipDirectionOutput = SpringTipDirectionOutputUAV;
 	SpringInitParameters->SpringClampNormal = InitData->SpringClampNormal.GetSafeNormal();
-	SpringInitParameters->DeltaTime = InitData->DeltaTime;
+	SpringInitParameters->DeltaTime = 0.02f;
 	SpringInitParameters->SpringDeltaLength = InitData->SpringDeltaLength;
 	SpringInitParameters->SpringStiffness = InitData->SpringStiffness;
 	SpringInitParameters->SpringElasticity = InitData->SpringElasticity;

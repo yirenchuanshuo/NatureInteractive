@@ -19,6 +19,7 @@ UFoliageInteractiveAdvanceComponent::UFoliageInteractiveAdvanceComponent()
 	// ...
 	FoliageInteractiveRender = MakeUnique<FFoliageInteractiveRender>();
 	InitData = MakeShared<FFoliageInteractiveInitData>();
+	SimulationData = MakeShared<FFoliageInteractiveSimulationData>();
 }
 
 
@@ -28,6 +29,7 @@ void UFoliageInteractiveAdvanceComponent::BeginPlay()
 	Super::BeginPlay();
 	InitRender();
 	FoliageInteractiveRender->InitRender(*this);
+	InitSimRenderData();
 }
 
 void UFoliageInteractiveAdvanceComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -41,6 +43,8 @@ void UFoliageInteractiveAdvanceComponent::TickComponent(float DeltaTime, ELevelT
                                                         FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	SimulationSpring(DeltaTime);
+	FoliageInteractiveRender->Render(*this);
 }
 
 void UFoliageInteractiveAdvanceComponent::PostLoad()
@@ -48,7 +52,7 @@ void UFoliageInteractiveAdvanceComponent::PostLoad()
 	Super::PostLoad();
 }
 
-void UFoliageInteractiveAdvanceComponent::InitRender()
+void UFoliageInteractiveAdvanceComponent::InitRender() const
 {
 	InitData->SpringBaseSegment = FoliageSpringBase->GameThread_GetRenderTargetResource();
 	InitData->SpringBaseSegmentVelocity = FoliageSpringBaseVelocity->GameThread_GetRenderTargetResource();
@@ -65,19 +69,27 @@ void UFoliageInteractiveAdvanceComponent::InitRender()
 	InitData->SpringElasticity = SpringElasticity;
 }
 
-void UFoliageInteractiveAdvanceComponent::InitHeight()
+void UFoliageInteractiveAdvanceComponent::InitSimRenderData() const
 {
-	
+	SimulationData->SpringBaseSegment = FoliageSpringBase->GameThread_GetRenderTargetResource();
+	SimulationData->SpringBaseSegmentVelocity = FoliageSpringBaseVelocity->GameThread_GetRenderTargetResource();
+	SimulationData->SpringBaseSegmentDirection = FoliageSpringBaseDirection->GameThread_GetRenderTargetResource();
+	SimulationData->SpringTipSegment = FoliageSpringTip->GameThread_GetRenderTargetResource();
+	SimulationData->SpringTipSegmentVelocity = FoliageSpringTipVelocity->GameThread_GetRenderTargetResource();
+	SimulationData->SpringTipSegmentDirection = FoliageSpringTipDirection->GameThread_GetRenderTargetResource();
+	SimulationData->SetFeatureLevel(GetWorld()->GetFeatureLevel());
+	SimulationData->SizeX = FoliageSpringBase->SizeX;
+	SimulationData->SizeY = FoliageSpringBase->SizeY;
+	SimulationData->SpringClampNormal = SpringClampNormal;
+	SimulationData->SpringDeltaLength = SpringDeltaLength;
+	SimulationData->SpringStiffness = SpringStiffness;
+	SimulationData->SpringElasticity = SpringElasticity;
 }
 
-void UFoliageInteractiveAdvanceComponent::InitSimRenderData()
+void UFoliageInteractiveAdvanceComponent::SimulationSpring(float DeltaTime) const
 {
-	
-}
-
-void UFoliageInteractiveAdvanceComponent::SimulationSpring(float DeltaTime)
-{
-	
+	SimulationData->DeltaTime = DeltaTime;
+	SimulationData->CollisionPosition = FVector3f(GetComponentLocation());
 }
 
 void UFoliageInteractiveAdvanceComponent::InitCollisionRenderData()
