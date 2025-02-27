@@ -20,6 +20,23 @@ UFoliageInteractiveAdvanceComponent::UFoliageInteractiveAdvanceComponent()
 	FoliageInteractiveRender = MakeUnique<FFoliageInteractiveRender>();
 	InitData = MakeShared<FFoliageInteractiveInitData>();
 	SimulationData = MakeShared<FFoliageInteractiveSimulationData>();
+
+	
+	static ConstructorHelpers::FObjectFinder<UTextureRenderTarget2D> SpringBaseObj(TEXT("/Script/Engine.TextureRenderTarget2D'/NatureInteractive/Grass/Texture/RT_SpringBase.RT_SpringBase'"));
+	static ConstructorHelpers::FObjectFinder<UTextureRenderTarget2D> SpringBaseVelocityObj(TEXT("/Script/Engine.TextureRenderTarget2D'/NatureInteractive/Grass/Texture/RT_SpringBaseVelocity.RT_SpringBaseVelocity'"));
+	static ConstructorHelpers::FObjectFinder<UTextureRenderTarget2D> SpringBaseDirectionObj(TEXT("/Script/Engine.TextureRenderTarget2D'/NatureInteractive/Grass/Texture/RT_SpringBaseDirection.RT_SpringBaseDirection'"));
+	static ConstructorHelpers::FObjectFinder<UTextureRenderTarget2D> SpringTipObj(TEXT("/Script/Engine.TextureRenderTarget2D'/NatureInteractive/Grass/Texture/RT_SpringTip.RT_SpringTip'"));
+	static ConstructorHelpers::FObjectFinder<UTextureRenderTarget2D> SpringTipVelocityObj(TEXT("/Script/Engine.TextureRenderTarget2D'/NatureInteractive/Grass/Texture/RT_SpringTipVelocity.RT_SpringTipVelocity'"));
+	static ConstructorHelpers::FObjectFinder<UTextureRenderTarget2D> SpringTipDirectionObj(TEXT("/Script/Engine.TextureRenderTarget2D'/NatureInteractive/Grass/Texture/RT_SpringTipDirection.RT_SpringTipDirection'"));
+	static ConstructorHelpers::FObjectFinder<UTexture2D> FoliageSpringLevelRootObj(TEXT("/Script/Engine.Texture2D'/NatureInteractive/Grass/Texture/T_RootBlack.T_RootBlack'"));
+	
+	FoliageSpringBase = SpringBaseObj.Object;
+	FoliageSpringBaseVelocity = SpringBaseVelocityObj.Object;
+	FoliageSpringBaseDirection = SpringBaseDirectionObj.Object;
+	FoliageSpringTip = SpringTipObj.Object;
+	FoliageSpringTipVelocity = SpringTipVelocityObj.Object;
+	FoliageSpringTipDirection = SpringTipDirectionObj.Object;
+	FoliageSpringLevelRoot = FoliageSpringLevelRootObj.Object;
 }
 
 
