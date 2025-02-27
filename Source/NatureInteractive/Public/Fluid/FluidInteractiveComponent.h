@@ -21,6 +21,7 @@ public:
 	void InitRenderData();
 	void UpdateRenderData(float DeltaTime);
 	void FluidSimulation();
+	//void ExChangeRenderTarget();
 
 	UPROPERTY(EditDefaultsOnly,Category = "Fluid")
 	TObjectPtr<UTextureRenderTarget2D> FluidOutput;
@@ -30,12 +31,46 @@ public:
 
 	UPROPERTY(EditDefaultsOnly,Category = "Fluid")
 	TObjectPtr<UTextureRenderTarget2D> FluidCache;
+
+	UPROPERTY(EditDefaultsOnly,Category = "Fluid")
+	TObjectPtr<UTextureRenderTarget2D> FluidNormal;
 	
 	UPROPERTY(EditDefaultsOnly,Category = "Fluid")
 	TObjectPtr<UMaterialParameterCollection> FluidMaterialParameterCollection;
 
+	//DrawMaterial
+	/*UPROPERTY(EditDefaultsOnly,Category = "Fluid")
+	TObjectPtr<UMaterialInterface> ForceMaterial;
+
+	UPROPERTY(EditDefaultsOnly,Category = "Fluid")
+	TObjectPtr<UMaterialInterface> OffsetMaterial;
+
+	UPROPERTY(EditDefaultsOnly,Category = "Fluid")
+	TObjectPtr<UMaterialInterface> DiffusionMaterial;
+
+	UPROPERTY(EditDefaultsOnly,Category = "Fluid")
+	TObjectPtr<UMaterialInterface> CopyMaterial;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> ForceMaterialInstance;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> OffsetMaterialInstance;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> DiffusionMaterialInstance;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> CopyMaterialInstance;*/
+
 	UPROPERTY(EditDefaultsOnly,Category = "Fluid")
 	float Radius = 50.f;
+
+	UPROPERTY(EditDefaultsOnly,Category = "Fluid")
+	float ForceStrength = 0.006f;
+
+	UPROPERTY(EditDefaultsOnly,Category = "Fluid")
+	float Damping = 0.95f;
 
 	UPROPERTY(EditDefaultsOnly,Category = "Fluid")
 	FIntPoint TexResolution;

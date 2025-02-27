@@ -14,6 +14,7 @@ public:
 	FTextureRenderTargetResource* FluidFinalData = nullptr;
 	FTextureRenderTargetResource* FluidPreviousData = nullptr;
 	FTextureRenderTargetResource* FluidCacheData = nullptr;
+	FTextureRenderTargetResource* FluidNormalData = nullptr;
 	
 	FVector3f PreviousPosition = FVector3f(0, 0, 0);
 	FVector3f Position = FVector3f(0, 0, 0);
@@ -21,6 +22,8 @@ public:
 	FVector2f Offset = FVector2f(0, 0);
 	float DeltaTime = 0.02f;
 	float Radius = 50.f;
+	float ForceStrength = 0.006f;
+	float Damping = 0.95f;
 	float SimUnlitSize = 4.f;
 	float HalfSize;
 	

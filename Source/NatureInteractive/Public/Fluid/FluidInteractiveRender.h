@@ -1,6 +1,7 @@
 #pragma once
 #include "FluidAddTrackPass.h"
 #include "FluidDiffusionPass.h"
+#include "FluidHeightToNormalPass.h"
 #include "FluidOffsetPass.h"
 
 
@@ -18,4 +19,5 @@ public:
 	TUniquePtr<FFluidAddTrackPass> AddTrackPass;
 	TUniquePtr<FFluidDiffusionPass> DiffusionPass;
 	TUniquePtr<FFluidOffsetPass> OffsetPass;
+	TUniquePtr<FFluidHeightToNormalPass> HeightToNormalPass;
 };

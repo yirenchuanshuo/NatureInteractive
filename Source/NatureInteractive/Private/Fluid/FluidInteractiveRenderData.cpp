@@ -8,12 +8,15 @@ void FFluidInteractiveRenderData::InitFluidRenderData(const UFluidInteractiveCom
 	FluidFinalData = FluidInteractiveComponent.FluidOutput->GameThread_GetRenderTargetResource();
 	FluidCacheData = FluidInteractiveComponent.FluidCache->GameThread_GetRenderTargetResource();
 	FluidPreviousData = FluidInteractiveComponent.FluidOutputPrevious->GameThread_GetRenderTargetResource();
+	FluidNormalData = FluidInteractiveComponent.FluidNormal->GameThread_GetRenderTargetResource();
 	SetFeatureLevel(FluidInteractiveComponent.GetWorld()->GetFeatureLevel());
 	OutputUAVFormat = FluidInteractiveComponent.FluidOutput->GetFormat();
 	PreviousPosition = FVector3f(FluidInteractiveComponent.PreviousLocation);
 	Position = FVector3f(FluidInteractiveComponent.CurrentLocation);
 	MoveVelocity = Position - PreviousPosition;
 	Radius = FluidInteractiveComponent.Radius;
+	ForceStrength = FluidInteractiveComponent.ForceStrength;
+	Damping = FluidInteractiveComponent.Damping;
 	SetSizeData(FluidInteractiveComponent.TexResolution);
 	SimUnlitSize = FluidInteractiveComponent.FluidSimulationSize.X / FluidInteractiveComponent.TexResolution.X;
 	HalfSize = FluidInteractiveComponent.FluidSimulationSize.X / 2;

@@ -17,6 +17,7 @@ class FFluidInteractiveAddTrackCS : public FGlobalShader
 	SHADER_PARAMETER(FVector3f,Velocity)
 	SHADER_PARAMETER(float, DeltaTime)
 	SHADER_PARAMETER(float, TrackRadius)
+	SHADER_PARAMETER(float, ForceStrength)
 	SHADER_PARAMETER(float,GridUnlitSize)
 	SHADER_PARAMETER(float,HalfSize)
 	END_SHADER_PARAMETER_STRUCT()
@@ -71,6 +72,7 @@ public:
 		SHADER_PARAMETER(FVector3f,Position)
 		SHADER_PARAMETER(FVector3f,Velocity)
 		SHADER_PARAMETER(float, TrackRadius)
+		SHADER_PARAMETER(float, ForceStrength)
 		SHADER_PARAMETER(float, HalfSize)
 		SHADER_PARAMETER_SAMPLER(SamplerState, FluidInputSampler)
 		RENDER_TARGET_BINDING_SLOTS()
@@ -113,6 +115,7 @@ void FFluidAddTrackPass::Draw(FRHICommandListImmediate& RHICommandList, const FF
 	FluidInteractiveAddTrackParameters->Position = RenderData->Position;
 	FluidInteractiveAddTrackParameters->Velocity = RenderData->MoveVelocity;
 	FluidInteractiveAddTrackParameters->TrackRadius = RenderData->Radius;
+	FluidInteractiveAddTrackParameters->ForceStrength = RenderData->ForceStrength;
 	FluidInteractiveAddTrackParameters->HalfSize = RenderData->HalfSize;
 	FluidInteractiveAddTrackParameters->FluidInputSampler = TStaticSamplerState<SF_Trilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 	FluidInteractiveAddTrackParameters->RenderTargets[0] = FRenderTargetBinding(FluidFinalOutput, ERenderTargetLoadAction::EClear);

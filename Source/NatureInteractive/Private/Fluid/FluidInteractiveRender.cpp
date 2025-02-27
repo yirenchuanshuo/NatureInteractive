@@ -7,6 +7,7 @@ FFluidInteractiveRender::FFluidInteractiveRender()
 	AddTrackPass = MakeUnique<FFluidAddTrackPass>();
 	DiffusionPass = MakeUnique<FFluidDiffusionPass>();
 	OffsetPass = MakeUnique<FFluidOffsetPass>();
+	HeightToNormalPass = MakeUnique<FFluidHeightToNormalPass>();
 }
 
 void FFluidInteractiveRender::Render(const UFluidInteractiveComponent& FluidInteractiveComponent) const
@@ -33,4 +34,5 @@ void FFluidInteractiveRender::Draw(FRHICommandListImmediate& RHICommandList,
 	OffsetPass->Draw(RHICommandList,RenderData);
 	AddTrackPass->Draw(RHICommandList,RenderData);
 	DiffusionPass->Draw(RHICommandList,RenderData);
+	HeightToNormalPass->Draw(RHICommandList,RenderData);
 }

@@ -16,7 +16,7 @@ class FFluidInteractiveDiffusionCS : public FGlobalShader
 	SHADER_PARAMETER_RDG_TEXTURE(Texture2D,FluidInput)
 	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, FluidOutput)
 	SHADER_PARAMETER(FVector2f,Offset)
-	SHADER_PARAMETER(float, DeltaTime)
+	SHADER_PARAMETER(float, Damping)
 	END_SHADER_PARAMETER_STRUCT()
 
 	public:
@@ -68,7 +68,7 @@ public:
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FluidPreviousInput)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, FluidInput)
 		SHADER_PARAMETER(FVector2f,Offset)
-		SHADER_PARAMETER(float,SimulationSize)
+		SHADER_PARAMETER(float, Damping)
 		SHADER_PARAMETER_SAMPLER(SamplerState, FluidInputSampler)
 		RENDER_TARGET_BINDING_SLOTS()
 	END_SHADER_PARAMETER_STRUCT()
@@ -111,6 +111,7 @@ void FFluidDiffusionPass::Draw(FRHICommandListImmediate& RHICommandList, const F
 	FluidInteractiveDiffusionParameters->FluidPreviousInput = FluidPreviousInput;
 	FluidInteractiveDiffusionParameters->FluidInput = FluidInput;
 	FluidInteractiveDiffusionParameters->Offset = RenderData->Offset / (RenderData->HalfSize*2);
+	FluidInteractiveDiffusionParameters->Damping = RenderData->Damping;
 	FluidInteractiveDiffusionParameters->FluidInputSampler = TStaticSamplerState<SF_Trilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 	FluidInteractiveDiffusionParameters->RenderTargets[0] = FRenderTargetBinding(FluidFinalOutput, ERenderTargetLoadAction::EClear);
 

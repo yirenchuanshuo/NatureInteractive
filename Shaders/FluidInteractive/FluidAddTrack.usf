@@ -7,6 +7,7 @@ SamplerState FluidInputSampler;
 float3 Position;
 float3 Velocity;
 float TrackRadius;
+float ForceStrength;
 float DeltaTime;
 float GridUnlitSize;
 float HalfSize;
@@ -54,7 +55,7 @@ void FluidAddTrackPS(
 	float2 UVWorldPos = UV * HalfSize *2 - HalfSize;
 	float MaxDistance = length(float2(HalfSize, HalfSize));
 	float Distance = length(UVWorldPos)/MaxDistance;
-	float Force = saturate((1-Distance)-(1-TrackRadius))/TrackRadius * length(Velocity.xy) * 0.006;
+	float Force = saturate((1-Distance)-(1-TrackRadius))/TrackRadius * length(Velocity.xy) * ForceStrength;
 	PreForce += Force;
 	OutColor = float4(PreForce, 1);
 }

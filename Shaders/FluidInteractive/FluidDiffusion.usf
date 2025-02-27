@@ -6,22 +6,22 @@ RWTexture2D<float4> FluidOutput;
 SamplerState FluidInputSampler;
 
 float2 Offset;
-float DeltaTime;
+float Damping;
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void FluidDiffusionCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	uint2 Pos = uint2(ThreadId.xy);
+	int2 Pos = uint2(ThreadId.xy);
 	/*uint2 MaxSize;
 	FluidInput.GetDimensions(MaxSize.x, MaxSize.y);*/
 	
-	uint2 PosLeft = Pos+uint2(-1, 0);
+	int2 PosLeft = Pos+uint2(-1, 0);
 	//PosLeft = max(PosLeft,0);
-	uint2 PosRight = Pos+uint2(1, 0);
+	int2 PosRight = Pos+uint2(1, 0);
 	//PosRight = min(PosRight,MaxSize-1);
-	uint2 PosDown = Pos+uint2(0, -1);
+	int2 PosDown = Pos+uint2(0, -1);
 	//PosDown = max(PosDown,0);
-	uint2 PosUp = Pos+uint2(0, 1);
+	int2 PosUp = Pos+uint2(0, 1);
 	//PosUp = min(PosUp,MaxSize-1);
 
 	float3 f0 = FluidInput[Pos].xyz * 4;
@@ -30,7 +30,7 @@ void FluidDiffusionCS(uint3 ThreadId : SV_DispatchThreadID)
 	float3 f3 = FluidInput[PosUp].xyz;
 	float3 f4 = FluidInput[PosDown].xyz;
 
-	float3 Force = ((f1+f2+f3+f4)*0.5 - FluidPreviousInput[Pos+Offset].xyz)*0.95;
+	float3 Force = ((f1+f2+f3+f4)*0.5 - FluidPreviousInput[Pos+Offset].xyz)*Damping;
 	FluidOutput[Pos] = float4(Force, 1);
 }
 
@@ -61,7 +61,7 @@ void FluidDiffusionPS(
 
 	float3 fPrevious = Texture2DSample(FluidPreviousInput,FluidInputSampler,UV+Offset).xyz;
 
-	float3 Force = ((f1+f2+f3+f4)*0.5 - fPrevious)*0.95;
+	float3 Force = ((f1+f2+f3+f4)*0.5 - fPrevious)*Damping;
 	OutColor = float4(Force, 1);
 }
 
