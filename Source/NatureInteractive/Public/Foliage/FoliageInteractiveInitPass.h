@@ -1,9 +1,9 @@
 #pragma once
 
-struct FoliageInteractiveInitData;
+class FFoliageInteractiveInitData;
 
-class FoliageInteractiveInitPass
+class FFoliageInteractiveInitPass
 {
 public:
-	void Draw(FRHICommandListImmediate& RHICommandList, const FoliageInteractiveInitData& InitData);
+	void Draw(FRHICommandListImmediate& RHICommandList,const FFoliageInteractiveInitData* InitData);
 };

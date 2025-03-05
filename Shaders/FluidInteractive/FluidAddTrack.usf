@@ -1,0 +1,61 @@
+#include "/Engine/Private/Common.ush"
+Texture2D FluidInput;
+RWTexture2D<float4> FluidOutput;
+
+SamplerState FluidInputSampler;
+
+float3 Position;
+float3 Velocity;
+float TrackRadius;
+float ForceStrength;
+float DeltaTime;
+float GridUnlitSize;
+float HalfSize;
+
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void FluidAddTrackCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	float3 GridPos = (float3(ThreadId.x, ThreadId.y, -0.5)+0.5) * GridUnlitSize + Position - HalfSize;
+	
+	float3 PreForce = FluidInput[ThreadId.xy].xyz;
+	float MaxDistance = length(float2(HalfSize, HalfSize));
+
+	float Distance = length(GridPos.xy - Position.xy)/MaxDistance;
+	float Force = saturate((1-Distance)-(1-TrackRadius))/TrackRadius * length(Velocity.xy) * 0.006;
+	
+	/*float Force = 0;
+	if (Distance<TrackRadius)
+	{
+		Force = 0.01* Velocity;
+	}*/
+	
+	PreForce += Force;
+	FluidOutput[ThreadId.xy] = float4(PreForce, 1);
+	//FluidOutput[ThreadId.xy] = float4(1,1,1,1);
+}
+
+void FluidAddTrackVS(  
+	in float4 InPosition : ATTRIBUTE0,  
+	in float2 InUV : ATTRIBUTE1,  
+	out float2 OutUV : TEXCOORD0,  
+	out float4 OutPosition : SV_POSITION  
+	)  
+{  
+	OutPosition = InPosition;  
+	OutUV = InUV;  
+}
+
+void FluidAddTrackPS(  
+	in float2 UV : TEXCOORD0,  
+	out float4 OutColor : SV_Target0  
+	)
+{
+	float3 PreForce = Texture2DSample(FluidInput,FluidInputSampler,UV).xyz;
+	float2 UVWorldPos = UV * HalfSize *2 - HalfSize;
+	float MaxDistance = length(float2(HalfSize, HalfSize));
+	float Distance = length(UVWorldPos)/MaxDistance;
+	float Force = saturate((1-Distance)-(1-TrackRadius))/TrackRadius * length(Velocity.xy) * ForceStrength;
+	PreForce += Force;
+	OutColor = float4(PreForce, 1);
+}

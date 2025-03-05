@@ -1,0 +1,31 @@
+#include "/Engine/Private/Common.ush"
+Texture2D FluidInput;
+RWTexture2D<float4> FluidOutput;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void HeightToNormalCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	int2 Pos = uint2(ThreadId.xy);
+	float2 MaxSize;
+	FluidInput.GetDimensions(MaxSize.x, MaxSize.y);
+
+	float TexSize = 1.0 / MaxSize.x;
+	
+	int2 PosLeft = Pos+uint2(-1, 0);
+	//PosLeft = max(PosLeft,0);
+	int2 PosRight = Pos+uint2(1, 0);
+	//PosRight = min(PosRight,MaxSize-1);
+	int2 PosDown = Pos+uint2(0, -1);
+	//PosDown = max(PosDown,0);
+	int2 PosUp = Pos+uint2(0, 1);
+	//PosUp = min(PosUp,MaxSize-1);
+	
+	float f1 = FluidInput[PosRight].x;
+	float f2 = FluidInput[PosLeft].x;
+	float f3 = FluidInput[PosUp].x;
+	float f4 = FluidInput[PosDown].x;
+
+	float2 DeltaHeight = float2(f1-f2, f3-f4) * 0.01;
+	float3 Normal = normalize(cross(float3(TexSize,0.0,DeltaHeight.x), float3(0.0,TexSize,DeltaHeight.y)));
+	FluidOutput[Pos] = float4(Normal, 1);
+}

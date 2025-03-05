@@ -6,14 +6,23 @@
 #include "ShaderParameterStruct.h"
 #include "Foliage/FoliageInteractiveRenderData.h"
 
-class FFoliageSpringInitComputeShader : public FGlobalShader
+
+class FFoliageInteractiveInitCS : public FGlobalShader
 {
-	DECLARE_SHADER_TYPE(FFoliageSpringInitComputeShader, Global);
-	SHADER_USE_PARAMETER_STRUCT(FFoliageSpringInitComputeShader, FGlobalShader);
+	DECLARE_SHADER_TYPE(FFoliageInteractiveInitCS, Global);
+	SHADER_USE_PARAMETER_STRUCT(FFoliageInteractiveInitCS, FGlobalShader);
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, FoliageSpringLevel0)
-		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, FoliageSpringLevel1)
-		SHADER_PARAMETER(float,Height)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, SpringBaseOutput)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, SpringBaseVelocityOutput)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, SpringBaseDirectionOutput)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, SpringTipOutput)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, SpringTipVelocityOutput)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, SpringTipDirectionOutput)
+	SHADER_PARAMETER(FVector3f, SpringClampNormal)
+	SHADER_PARAMETER(float, DeltaTime)
+	SHADER_PARAMETER(float, SpringDeltaLength)
+	SHADER_PARAMETER(float, SpringStiffness)
+	SHADER_PARAMETER(float, SpringElasticity)
 	END_SHADER_PARAMETER_STRUCT()
 
 	public:
@@ -28,56 +37,80 @@ class FFoliageSpringInitComputeShader : public FGlobalShader
 		OutEnvironment.SetDefine(TEXT("SIZE_Y"), ThreadY);
 		OutEnvironment.SetDefine(TEXT("SIZE_Z"), ThreadZ);
 	}
-
-
+	
 	static constexpr uint32 ThreadX = 32;
 	static constexpr uint32 ThreadY = 32;
 	static constexpr uint32 ThreadZ = 1;
 };
-IMPLEMENT_SHADER_TYPE(,FFoliageSpringInitComputeShader, TEXT("/Plugin/NatureInteractive/FoliageInteractive/FoliageSpring.usf"), TEXT("InitSpringCS"), SF_Compute);
+IMPLEMENT_SHADER_TYPE(,FFoliageInteractiveInitCS, TEXT("/Plugin/NatureInteractive/FoliageInteractive/FoliageSpring.usf"), TEXT("InitSpringCS"), SF_Compute);
 
-
-void FoliageInteractiveInitPass::Draw(FRHICommandListImmediate& RHICommandList, const FoliageInteractiveInitData& InitData)
+void FFoliageInteractiveInitPass::Draw(FRHICommandListImmediate& RHICommandList,
+	const FFoliageInteractiveInitData* InitData)
 {
 	FRDGBuilder GraphBuilder(RHICommandList);
-	
-	const FIntPoint Size = FIntPoint(InitData.SpringLevel0->GetSizeX(),InitData.SpringLevel0->GetSizeY());
-	const FIntVector GroupSize = FIntVector(Size.X / FFoliageSpringInitComputeShader::ThreadX, Size.Y / FFoliageSpringInitComputeShader::ThreadY,1);
 
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create2D(
-			Size,
-			InitData.OutputUAVFormat,
-			FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
-
-	FRDGTextureRef SpringLevel0 = GraphBuilder.CreateTexture(Desc, TEXT("SpringLevel0"));
-	FRDGTextureUAVRef SpringLevel0UAV = GraphBuilder.CreateUAV(SpringLevel0);
-
-	FRDGTextureRef SpringLevel1 = GraphBuilder.CreateTexture(Desc, TEXT("SpringLevel1"));
-	FRDGTextureUAVRef SpringLevel1UAV = GraphBuilder.CreateUAV(SpringLevel1);
+		FIntPoint(InitData->SizeX, InitData->SizeY),
+		InitData->OutputUAVFormat,
+		FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
 	
-	FFoliageSpringInitComputeShader::FParameters* Parameters = GraphBuilder.AllocParameters<FFoliageSpringInitComputeShader::FParameters>();
-	Parameters->FoliageSpringLevel0 = SpringLevel0UAV;
-	Parameters->FoliageSpringLevel1 = SpringLevel1UAV;
-	Parameters->Height = InitData.Height;
 	
-	TShaderMapRef<FFoliageSpringInitComputeShader> ComputeShader(GetGlobalShaderMap(InitData.FeatureLevel));
+	FRDGTextureRef SpringBaseOutput = GraphBuilder.CreateTexture(Desc, TEXT("SpringBaseOutput"));
+	FRDGTextureUAVRef SpringBaseOutputUAV = GraphBuilder.CreateUAV(SpringBaseOutput);
 
+	FRDGTextureRef SpringBaseVelocityOutput = GraphBuilder.CreateTexture(Desc, TEXT("SpringBaseVelocityOutput"));
+	FRDGTextureUAVRef SpringBaseVelocityOutputUAV = GraphBuilder.CreateUAV(SpringBaseVelocityOutput);
+
+	FRDGTextureRef SpringBaseDirectionOutput = GraphBuilder.CreateTexture(Desc, TEXT("SpringBaseDirectionOutput"));
+	FRDGTextureUAVRef SpringBaseDirectionOutputUAV = GraphBuilder.CreateUAV(SpringBaseDirectionOutput);
+
+	FRDGTextureRef SpringTipOutput = GraphBuilder.CreateTexture(Desc, TEXT("SpringTipOutput"));
+	FRDGTextureUAVRef SpringTipOutputUAV = GraphBuilder.CreateUAV(SpringTipOutput);
+
+	FRDGTextureRef SpringTipVelocityOutput = GraphBuilder.CreateTexture(Desc, TEXT("SpringTipVelocityOutput"));
+	FRDGTextureUAVRef SpringTipVelocityOutputUAV = GraphBuilder.CreateUAV(SpringTipVelocityOutput);
+
+	FRDGTextureRef SpringTipDirectionOutput = GraphBuilder.CreateTexture(Desc, TEXT("SpringTipDirectionOutput"));
+	FRDGTextureUAVRef SpringTipDirectionOutputUAV = GraphBuilder.CreateUAV(SpringTipDirectionOutput);
+	
+
+	TShaderMapRef<FFoliageInteractiveInitCS> SpringInitComputeShader(GetGlobalShaderMap(InitData->FeatureLevel));
+	FFoliageInteractiveInitCS::FParameters* SpringInitParameters = GraphBuilder.AllocParameters<FFoliageInteractiveInitCS::FParameters>();
+	SpringInitParameters->SpringBaseOutput = SpringBaseOutputUAV;
+	SpringInitParameters->SpringBaseVelocityOutput = SpringBaseVelocityOutputUAV;
+	SpringInitParameters->SpringBaseDirectionOutput = SpringBaseDirectionOutputUAV;
+	SpringInitParameters->SpringTipOutput = SpringTipOutputUAV;
+	SpringInitParameters->SpringTipVelocityOutput = SpringTipVelocityOutputUAV;
+	SpringInitParameters->SpringTipDirectionOutput = SpringTipDirectionOutputUAV;
+	SpringInitParameters->SpringClampNormal = InitData->SpringClampNormal.GetSafeNormal();
+	SpringInitParameters->DeltaTime = 0.02f;
+	SpringInitParameters->SpringDeltaLength = InitData->SpringDeltaLength;
+	SpringInitParameters->SpringStiffness = InitData->SpringStiffness;
+	SpringInitParameters->SpringElasticity = InitData->SpringElasticity;
+
+	
+	auto GroupCount = FIntVector(InitData->SizeX / FFoliageInteractiveInitCS::ThreadX, InitData->SizeY / FFoliageInteractiveInitCS::ThreadY, 1);
 	GraphBuilder.AddPass(
-		RDG_EVENT_NAME("FoliageInteractiveInitComputeShader"),
-		Parameters,
-		ERDGPassFlags::AsyncCompute,
-		[ComputeShader, Parameters, GroupSize](FRHIComputeCommandList& RHICmdList)
-		{
-			FComputeShaderUtils::Dispatch(RHICmdList, ComputeShader, *Parameters, GroupSize);
-		});
-
+	RDG_EVENT_NAME("FFoliageInteractiveInitComputeShader"),
+	SpringInitParameters,
+	ERDGPassFlags::AsyncCompute,
+	[SpringInitComputeShader,&SpringInitParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
+	{
+		FComputeShaderUtils::Dispatch(RHICmdList, SpringInitComputeShader, *SpringInitParameters,GroupCount);
+	});
+	
+	FRDGTextureRef SpringBase = RegisterExternalTexture(GraphBuilder, InitData->SpringBaseSegment->GetRenderTargetTexture(), TEXT("SpringBase"));
+	FRDGTextureRef SpringBaseVelocity = RegisterExternalTexture(GraphBuilder, InitData->SpringBaseSegmentVelocity->GetRenderTargetTexture(), TEXT("SpringBaseVelocity"));
+	FRDGTextureRef SpringBaseDirection = RegisterExternalTexture(GraphBuilder, InitData->SpringBaseSegmentDirection->GetRenderTargetTexture(), TEXT("SpringBaseDirection"));
+	FRDGTextureRef SpringTip = RegisterExternalTexture(GraphBuilder, InitData->SpringTipSegment->GetRenderTargetTexture(), TEXT("SpringTip"));
+	FRDGTextureRef SpringTipVelocity = RegisterExternalTexture(GraphBuilder, InitData->SpringTipSegmentVelocity->GetRenderTargetTexture(), TEXT("SpringTipVelocity"));
+	FRDGTextureRef SpringTipDirection = RegisterExternalTexture(GraphBuilder, InitData->SpringTipSegmentDirection->GetRenderTargetTexture(), TEXT("SpringTipDirection"));
 	FRHICopyTextureInfo CopyInfo;
-	CopyInfo.Size = FIntVector(Size.X, Size.Y, 1);
-	FRDGTextureRef SpringLevel0Out = RegisterExternalTexture(GraphBuilder, InitData.SpringLevel0->GetRenderTargetTexture(), TEXT("SpringLevel0Out"));
-	FRDGTextureRef SpringLevel1Out = RegisterExternalTexture(GraphBuilder, InitData.SpringLevel1->GetRenderTargetTexture(), TEXT("SpringLevel1Out"));
-	
-	AddCopyTexturePass(GraphBuilder, SpringLevel0, SpringLevel0Out,CopyInfo);
-	AddCopyTexturePass(GraphBuilder, SpringLevel1, SpringLevel1Out,CopyInfo);
-	
+	AddCopyTexturePass(GraphBuilder, SpringBaseOutput, SpringBase, CopyInfo);
+	AddCopyTexturePass(GraphBuilder, SpringBaseVelocityOutput, SpringBaseVelocity, CopyInfo);
+	AddCopyTexturePass(GraphBuilder, SpringBaseDirectionOutput, SpringBaseDirection, CopyInfo);
+	AddCopyTexturePass(GraphBuilder, SpringTipOutput, SpringTip, CopyInfo);
+	AddCopyTexturePass(GraphBuilder, SpringTipVelocityOutput, SpringTipVelocity, CopyInfo);
+	AddCopyTexturePass(GraphBuilder, SpringTipDirectionOutput, SpringTipDirection, CopyInfo);
 	GraphBuilder.Execute();
 }

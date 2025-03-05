@@ -1,0 +1,67 @@
+#include "/Engine/Private/Common.ush"
+Texture2D FluidPreviousInput;
+Texture2D FluidInput;
+RWTexture2D<float4> FluidOutput;
+
+SamplerState FluidInputSampler;
+
+float2 Offset;
+float Damping;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void FluidDiffusionCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	int2 Pos = uint2(ThreadId.xy);
+	/*uint2 MaxSize;
+	FluidInput.GetDimensions(MaxSize.x, MaxSize.y);*/
+	
+	int2 PosLeft = Pos+uint2(-1, 0);
+	//PosLeft = max(PosLeft,0);
+	int2 PosRight = Pos+uint2(1, 0);
+	//PosRight = min(PosRight,MaxSize-1);
+	int2 PosDown = Pos+uint2(0, -1);
+	//PosDown = max(PosDown,0);
+	int2 PosUp = Pos+uint2(0, 1);
+	//PosUp = min(PosUp,MaxSize-1);
+
+	float3 f0 = FluidInput[Pos].xyz * 4;
+	float3 f1 = FluidInput[PosRight].xyz;
+	float3 f2 = FluidInput[PosLeft].xyz;
+	float3 f3 = FluidInput[PosUp].xyz;
+	float3 f4 = FluidInput[PosDown].xyz;
+
+	float3 Force = ((f1+f2+f3+f4)*0.5 - FluidPreviousInput[Pos+Offset].xyz)*Damping;
+	FluidOutput[Pos] = float4(Force, 1);
+}
+
+void FluidDiffusionVS(  
+	in float4 InPosition : ATTRIBUTE0,  
+	in float2 InUV : ATTRIBUTE1,  
+	out float2 OutUV : TEXCOORD0,  
+	out float4 OutPosition : SV_POSITION  
+	)  
+{  
+	OutPosition = InPosition;  
+	OutUV = InUV;  
+}
+
+void FluidDiffusionPS(  
+	in float2 UV : TEXCOORD0,  
+	out float4 OutColor : SV_Target0  
+	)
+{
+	uint2 dimensions;
+	FluidInput.GetDimensions(dimensions.x, dimensions.y);
+	float TexSize = 1.0 / dimensions.x;
+
+	float3 f1 = Texture2DSample(FluidInput,FluidInputSampler,UV+float2(1,0)*TexSize).xyz;
+	float3 f2 = Texture2DSample(FluidInput,FluidInputSampler,UV+float2(-1,0)*TexSize).xyz;
+	float3 f3 = Texture2DSample(FluidInput,FluidInputSampler,UV+float2(0,1)*TexSize).xyz;
+	float3 f4 = Texture2DSample(FluidInput,FluidInputSampler,UV+float2(0,-1)*TexSize).xyz;
+
+	float3 fPrevious = Texture2DSample(FluidPreviousInput,FluidInputSampler,UV+Offset).xyz;
+
+	float3 Force = ((f1+f2+f3+f4)*0.5 - fPrevious)*Damping;
+	OutColor = float4(Force, 1);
+}
+
