@@ -31,7 +31,7 @@ public:
 	void SetWindField(AWindField* InWindField);
 
 	UFUNCTION(BlueprintCallable,Category = "WindField")
-	void RegisterMotro();
+	void RegisterMotor();
 	
 	UPROPERTY()
 	TWeakObjectPtr<AWindField> WindField;

@@ -58,7 +58,7 @@ void UWindMotorComponent::SetWindField(AWindField* InWindField)
 	WindField = InWindField;
 }
 
-void UWindMotorComponent::RegisterMotro()
+void UWindMotorComponent::RegisterMotor()
 {
 	if (WindField.IsValid())
 	{
