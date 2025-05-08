@@ -10,10 +10,10 @@
 
 void BuildProjectionMatrix(FIntPoint InRenderTargetSize, float InFOV, float InNearClippingPlane, FMatrix& OutProjectionMatrix)
 {
-	float const XAxisMultiplier = 1.0f;
-	float const YAxisMultiplier = InRenderTargetSize.X / float(InRenderTargetSize.Y);
+	constexpr float XAxisMultiplier = 1.0f;
+	float const YAxisMultiplier = InRenderTargetSize.X / static_cast<float>(InRenderTargetSize.Y);
 
-	if ((int32)ERHIZBuffer::IsInverted)
+	if (static_cast<int32>(ERHIZBuffer::IsInverted))
 	{
 		OutProjectionMatrix = FReversedZPerspectiveMatrix(
 			InFOV,
@@ -80,7 +80,7 @@ void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth()
 		FTransform Transform = Camera->GetComponentTransform();
 		FVector ViewLocation = Transform.GetLocation();
 		Transform.SetScale3D(FVector::OneVector);
-		FMatrix ViewRotationMatrix = Transform.ToInverseMatrixWithScale();
+		FMatrix ViewRotationMatrix = FInverseRotationMatrix(Camera->GetComponentRotation());
 		ViewRotationMatrix = ViewRotationMatrix * FMatrix(
 			FPlane(0,0,1,0),
 			FPlane(1,0,0,0),
