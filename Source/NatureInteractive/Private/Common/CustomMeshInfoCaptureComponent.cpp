@@ -71,7 +71,7 @@ void UCustomMeshInfoCaptureComponent::TickComponent(float DeltaTime, ELevelTick 
 void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth()
 {
 	
-	TWeakObjectPtr WorldPtr = GetWorld();
+	TWeakObjectPtr<UWorld> WorldPtr = GetWorld();
 	UCameraComponent* Camera = Cast<UCameraComponent>(GetOwner()->GetComponentByClass(UCameraComponent::StaticClass()));
 	FSceneInterface* SceneInterface = WorldPtr->Scene;
 	if ( Camera && SceneInterface )
