@@ -38,6 +38,7 @@ public:
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly, Category = "Wind Field")
 	TObjectPtr<UWindFieldComponent> WindFieldComponent;
 
+	UPROPERTY(Transient)
 	TArray<UWindMotorComponent*>WindMotorComponents;
 
 	TUniquePtr<WindFieldRender> WindFieldRenderManager;
