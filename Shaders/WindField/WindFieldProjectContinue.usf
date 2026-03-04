@@ -46,9 +46,9 @@ void WindFieldProjectThirdCS(uint3 ThreadId : SV_DispatchThreadID)
 	float V = WindFieldVelocityYInput[pos];
 	float W = WindFieldVelocityZInput[pos];
 
-	U -= (PU0 - PU1)/(h*3);
-	V -= (PV0 - PV1)/(h*3);
-	W -= (PW0 - PW1)/(h*3);
+	U -= (PU0 - PU1)/h * h/3;
+	V -= (PV0 - PV1)/h * h/3;
+	W -= (PW0 - PW1)/h * h/3;
 
 	WindFieldVelocityXOutput[pos] = U;
 	WindFieldVelocityYOutput[pos] = V;

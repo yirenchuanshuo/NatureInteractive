@@ -16,7 +16,7 @@ void WindFieldOffsetCS(uint3 ThreadId : SV_DispatchThreadID)
 	int3 FinalPos = pos + int3(MoveVelocity);
 	int3 MaxSize;
 	WindFieldVelocityXOutput.GetDimensions(MaxSize.x, MaxSize.y, MaxSize.z);
-	FinalPos = max(min(FinalPos,MaxSize),0);
+	FinalPos = clamp(FinalPos, int3(0,0,0), MaxSize-1);
 
 	WindFieldVelocityXOutput[ThreadId] = WindFieldVelocityXInput[FinalPos];
 	WindFieldVelocityYOutput[ThreadId] = WindFieldVelocityYInput[FinalPos];

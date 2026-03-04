@@ -44,6 +44,9 @@ void UWindFieldComponent::PostLoad()
 		return;
 	}
 	
+	WindFieldChannel_R1->bCanCreateUAV = true;
+	WindFieldChannel_G1->bCanCreateUAV = true;
+	WindFieldChannel_B1->bCanCreateUAV = true;
 	WindFieldRenderData->SetSizeData(TexResolution);
 	WindFieldRenderData->OutputUAVFormat = PF_A32B32G32R32F;
 	

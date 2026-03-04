@@ -83,7 +83,7 @@ void WindFieldAdvectPass::Draw(FRHICommandListImmediate& RHICommandList,const FW
 	RDG_EVENT_NAME("WindFieldDataAdvectComputeShader"),
 	WindFieldAdvectParameters,
 	ERDGPassFlags::AsyncCompute,
-	[WindFieldComputeShader,&WindFieldAdvectParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
+	[WindFieldComputeShader,WindFieldAdvectParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
 	{
 		FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *WindFieldAdvectParameters,GroupCount);
 	});

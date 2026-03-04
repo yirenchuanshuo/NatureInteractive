@@ -80,7 +80,7 @@ void WindFieldOffsetPass::Draw(FRHICommandListImmediate& RHICommandList,const FW
 	RDG_EVENT_NAME("WindFieldDataAddSourceComputeShader"),
 	WindFieldOffsetParameters,
 	ERDGPassFlags::AsyncCompute,
-	[WindFieldComputeShader,&WindFieldOffsetParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
+	[WindFieldComputeShader,WindFieldOffsetParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
 	{
 		FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *WindFieldOffsetParameters,GroupCount);
 	});

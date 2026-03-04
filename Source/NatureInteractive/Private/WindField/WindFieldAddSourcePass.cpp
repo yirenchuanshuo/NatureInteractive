@@ -72,8 +72,12 @@ void WindFieldAddSourcePass::Draw(FRHICommandListImmediate& RHICommandList,const
 	TArray<FWindMotorRenderData> WindMotorRenderDatas;
 	WindMotorRenderDataManager.WindMotorRenderDatasMap.GenerateValueArray(WindMotorRenderDatas);
 
-	FRDGBufferRef WindMotorBuffer = CreateWindMotorBuffer(GraphBuilder,WindMotorRenderDatas.Num());
-	GraphBuilder.QueueBufferUpload(WindMotorBuffer, WindMotorRenderDatas.GetData(), sizeof(FWindMotorRenderData)*WindMotorRenderDatas.Num(), ERDGInitialDataFlags::None);
+	const int32 MotorNum = WindMotorRenderDatas.Num();
+	FRDGBufferRef WindMotorBuffer = CreateWindMotorBuffer(GraphBuilder, FMath::Max(MotorNum, 1));
+	if (MotorNum > 0)
+	{
+		GraphBuilder.QueueBufferUpload(WindMotorBuffer, WindMotorRenderDatas.GetData(), sizeof(FWindMotorRenderData)*MotorNum, ERDGInitialDataFlags::None);
+	}
 
 	TShaderMapRef<FWindFieldComputeShader_AddSourceCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
 	FWindFieldComputeShader_AddSourceCS::FParameters* WindFieldAddSourceParameters = GraphBuilder.AllocParameters<FWindFieldComputeShader_AddSourceCS::FParameters>();
@@ -89,7 +93,7 @@ void WindFieldAddSourcePass::Draw(FRHICommandListImmediate& RHICommandList,const
 	WindFieldAddSourceParameters->WindMotorBuffer = GraphBuilder.CreateSRV(WindMotorBuffer);
 	WindFieldAddSourceParameters->UnitSize = SetupData.UintSize;
 	WindFieldAddSourceParameters->DeltaTime = SetupData.DeltaTime;
-	WindFieldAddSourceParameters->MotorNum = WindMotorRenderDatas.Num();
+	WindFieldAddSourceParameters->MotorNum = MotorNum;
 	
 	
 	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_AddSourceCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_AddSourceCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_AddSourceCS::ThreadZ);
@@ -97,7 +101,7 @@ void WindFieldAddSourcePass::Draw(FRHICommandListImmediate& RHICommandList,const
 	RDG_EVENT_NAME("WindFieldDataAddSourceComputeShader"),
 	WindFieldAddSourceParameters,
 	ERDGPassFlags::AsyncCompute,
-	[WindFieldComputeShader,&WindFieldAddSourceParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
+	[WindFieldComputeShader,WindFieldAddSourceParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
 	{
 		FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *WindFieldAddSourceParameters,GroupCount);
 	});

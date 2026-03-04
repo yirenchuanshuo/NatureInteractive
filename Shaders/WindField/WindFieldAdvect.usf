@@ -25,9 +25,9 @@ void WindFieldAdvectCS(uint3 ThreadId : SV_DispatchThreadID)
 	float y = j - Dt0.y * V;
 	float z = k - Dt0.z * W;
 
-	x = clamp(x,0.5,NumCells.x+0.5);
-	y = clamp(y,0.5,NumCells.y+0.5);
-	z = clamp(z,0.5,NumCells.z+0.5);
+	x = clamp(x,0.5,NumCells.x-0.5);
+	y = clamp(y,0.5,NumCells.y-0.5);
+	z = clamp(z,0.5,NumCells.z-0.5);
 
 	int x0 = int(x);
 	int y0 = int(y);
@@ -78,6 +78,7 @@ void WindFieldAdvectCS(uint3 ThreadId : SV_DispatchThreadID)
 	float3 V111 = float3(VX111,VY111,VZ111);
 
 	float3 Advect = lerp(lerp(lerp(V000,V100,xd),lerp(V010,V110,xd),yd),lerp(lerp(V001,V101,xd),lerp(V011,V111,xd),yd),zd);
+	
 	WindFieldAdvectX[ThreadId] = Advect.x;
 	WindFieldAdvectY[ThreadId] = Advect.y;
 	WindFieldAdvectZ[ThreadId] = Advect.z;

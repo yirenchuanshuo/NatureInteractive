@@ -139,7 +139,7 @@ void WindFieldProjectPass::DrawFirst(FRHICommandListImmediate& RHICommandList,co
 		RDG_EVENT_NAME("WindFieldProjectFirstComputeShader"),
 		WindFieldProjectFirstParameters,
 		ERDGPassFlags::AsyncCompute,
-		[WindFieldComputeShader,&WindFieldProjectFirstParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
+		[WindFieldComputeShader,WindFieldProjectFirstParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
 		{
 			FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *WindFieldProjectFirstParameters,GroupCount);
 		});
@@ -182,7 +182,7 @@ void WindFieldProjectPass::DrawSecond(FRHICommandListImmediate& RHICommandList, 
 			RDG_EVENT_NAME("WindFieldProjectSecondComputeShader"),
 			WindFieldProjectSecondParameters,
 			ERDGPassFlags::AsyncCompute,
-			[WindFieldComputeShader,&WindFieldProjectSecondParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
+			[WindFieldComputeShader,WindFieldProjectSecondParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
 			{
 				FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *WindFieldProjectSecondParameters,GroupCount);
 			});
@@ -233,7 +233,7 @@ void WindFieldProjectPass::DrawThird(FRHICommandListImmediate& RHICommandList,co
 		RDG_EVENT_NAME("WindFieldProjectThirdComputeShader"),
 		WindFieldProjectThirdParameters,
 		ERDGPassFlags::AsyncCompute,
-		[WindFieldComputeShader, &WindFieldProjectThirdParameters, GroupCount](FRHIComputeCommandList& RHICmdList)
+		[WindFieldComputeShader, WindFieldProjectThirdParameters, GroupCount](FRHIComputeCommandList& RHICmdList)
 		{
 			FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *WindFieldProjectThirdParameters, GroupCount);
 		});

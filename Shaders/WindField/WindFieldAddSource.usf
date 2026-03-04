@@ -29,9 +29,9 @@ StructuredBuffer<FWindMotorData> WindMotorBuffer;
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldAddSourceCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	float XForce = WindFieldSourceXPrevious[ThreadId];
-	float YForce = WindFieldSourceYPrevious[ThreadId];
-	float ZForce = WindFieldSourceZPrevious[ThreadId];
+	float XForce = WindFieldSourceXPrevious[ThreadId] ;
+	float YForce = WindFieldSourceYPrevious[ThreadId] ;
+	float ZForce = WindFieldSourceZPrevious[ThreadId] ;
 	
 	float3 Position = ThreadId.xyz * UnitSize + WindFieldWorldPosition;
 
@@ -40,9 +40,9 @@ void WindFieldAddSourceCS(uint3 ThreadId : SV_DispatchThreadID)
 		float3 ForceDir = normalize(Position - WindMotorBuffer[i].WorldPosition);
 		float ForceLength = length(Position - WindMotorBuffer[i].WorldPosition);
 		float ForceFalloff = 1 - saturate(ForceLength / WindMotorBuffer[i].Radius);
-		//float IsIncident = select(ForceLength<WindMotorBuffer[i].Radius, 1, 0);
-		float3 OutVelocity = select(ForceLength<WindMotorBuffer[i].Radius,ForceDir*WindMotorBuffer[i].Strength,float3(0,0,0));
-		//float3 OutVelocity = select(ForceLength<WindMotorBuffer[i].Radius,ForceDir*WindMotorBuffer[i].Strength ,float3(0,0,0));
+		float IsIncident = select(ForceLength<WindMotorBuffer[i].Radius, 1, 0);
+		//float3 OutVelocity = ForceDir * ForceFalloff * WindMotorBuffer[i].Strength * ForceFalloff;
+		float3 OutVelocity = ForceDir *  WindMotorBuffer[i].Strength * IsIncident;
 
 		XForce += OutVelocity.x * DeltaTime;
 		YForce += OutVelocity.y * DeltaTime;

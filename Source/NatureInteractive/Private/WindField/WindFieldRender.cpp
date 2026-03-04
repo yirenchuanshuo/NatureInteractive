@@ -32,7 +32,7 @@ void WindFieldRender::Render(const FWindFieldRenderData& RenderData,const FWindM
 void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const
 {
 	OffsetPass->Draw(RHICommandList,RenderData);
-	if(WindMotorRenderDataManager.WindMotorRenderDatasMap.Num() > 0)
+	if (WindMotorRenderDataManager.WindMotorRenderDatasMap.Num()>0)
 	{
 		AddSourcePass->Draw(RHICommandList,RenderData,WindMotorRenderDataManager);
 	}

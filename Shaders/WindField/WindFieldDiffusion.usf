@@ -25,9 +25,9 @@ void WindFieldDiffusionCS(uint3 ThreadId : SV_DispatchThreadID)
 	uint3 VX_RightPos = Pos;
 	VX_RightPos.x+=1;
 	VX_RightPos.x = min(VX_RightPos.x,WindCellSize.x);
-	float VX_Rigth = WindFieldSourceX[VX_RightPos];
-	float VY_Rigth = WindFieldSourceY[VX_RightPos];
-	float VZ_Rigth = WindFieldSourceZ[VX_RightPos];
+	float VX_Right = WindFieldSourceX[VX_RightPos];
+	float VY_Right = WindFieldSourceY[VX_RightPos];
+	float VZ_Right = WindFieldSourceZ[VX_RightPos];
 
 	uint3 VX_LeftPos = Pos;
 	VX_LeftPos.x-=1;
@@ -65,15 +65,15 @@ void WindFieldDiffusionCS(uint3 ThreadId : SV_DispatchThreadID)
 	float VZ_Back = WindFieldSourceZ[VX_BackPos];
 
 	float3 V_Self = float3(VX_Self,VY_Self,VZ_Self);
-	float3 V_Rigth = float3(VX_Rigth,VY_Rigth,VZ_Rigth);
+	float3 V_Right = float3(VX_Right,VY_Right,VZ_Right);
 	float3 V_Left = float3(VX_Left,VY_Left,VZ_Left);
 	float3 V_Up = float3(VX_Up,VY_Up,VZ_Up);
 	float3 V_Down = float3(VX_Down,VY_Down,VZ_Down);
 	float3 V_Front = float3(VX_Front,VY_Front,VZ_Front);
 	float3 V_Back = float3(VX_Back,VY_Back,VZ_Back);
 
-	float3 Diffusion = (V_Self+a*(V_Rigth+V_Left+V_Up+V_Down+V_Front+V_Back))/(1+6*a);
-	WindFieldDiffusionX[ThreadId] = Diffusion.x;
-	WindFieldDiffusionY[ThreadId] = Diffusion.y;
-	WindFieldDiffusionZ[ThreadId] = Diffusion.z;
+	float3 DiffusionResult = (V_Self+a*(V_Right+V_Left+V_Up+V_Down+V_Front+V_Back))/(1+6*a);
+	WindFieldDiffusionX[ThreadId] = DiffusionResult.x;
+	WindFieldDiffusionY[ThreadId] = DiffusionResult.y;
+	WindFieldDiffusionZ[ThreadId] = DiffusionResult.z;
 }
