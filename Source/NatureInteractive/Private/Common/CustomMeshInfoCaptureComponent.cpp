@@ -2,9 +2,7 @@
 
 
 #include "Common/CustomMeshInfoCaptureComponent.h"
-
 #include "Camera/CameraComponent.h"
-#include "Common/InteractiveInfoRenderingPass.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Runtime/Renderer/Private/ScenePrivate.h"
 
@@ -44,7 +42,6 @@ UCustomMeshInfoCaptureComponent::UCustomMeshInfoCaptureComponent()
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = true;
-
 	// ...
 }
 
@@ -54,25 +51,18 @@ void UCustomMeshInfoCaptureComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// ...
+	CaptureSize = FIntPoint(CaptureRenderTarget->SizeX, CaptureRenderTarget->SizeY);
 	
 }
 
 
 // Called every frame
-void UCustomMeshInfoCaptureComponent::TickComponent(float DeltaTime, ELevelTick TickType,
-                                                    FActorComponentTickFunction* ThisTickFunction)
-{
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	CaptureCustomMeshDepth();
-	// ...
-}
 
-void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth()
+
+void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth(const UCameraComponent* Camera,TArray<UMeshComponent*> Meshes)
 {
 	
 	TWeakObjectPtr<UWorld> WorldPtr = GetWorld();
-	UCameraComponent* Camera = Cast<UCameraComponent>(GetOwner()->GetComponentByClass(UCameraComponent::StaticClass()));
 	FSceneInterface* SceneInterface = WorldPtr->Scene;
 	if ( Camera && SceneInterface )
 	{
@@ -86,14 +76,51 @@ void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth()
 			FPlane(1,0,0,0),
 			FPlane(0,1,0,0),
 			FPlane(0,0,0,1));
-		const float FOV = Camera->FieldOfView * (PI / 360.f);
+		
+		
 
 		FMatrix ProjectionMatrix = FMatrix::Identity;
 		const float ClippingPlane = GNearClippingPlane;
-	
-		FIntPoint CaptureSize(CaptureRenderTarget->SizeX, CaptureRenderTarget->SizeY);
-		BuildProjectionMatrix(CaptureSize,FOV,ClippingPlane,ProjectionMatrix);
+		
+		if (Camera->ProjectionMode == ECameraProjectionMode::Orthographic)
+		{
+			const float OrthoWidth = Camera->OrthoWidth;
+			const float AspectRatio = CaptureSize.X / static_cast<float>(CaptureSize.Y);
+			const float OrthoHalfWidth = OrthoWidth * 0.5f;
+			const float OrthoHalfHeight = OrthoHalfWidth / AspectRatio;
 
+			constexpr float NearPlane = 0; // 默认为 0
+			const float FarPlane = FMath::Min(Camera->OrthoFarClipPlane, 
+										UE_FLOAT_HUGE_DISTANCE / 4.0f);
+			
+			// 与 UE5 引擎一致的公式
+			const float ZScale  = 1.0f / (FarPlane - NearPlane);
+			constexpr float ZOffset = -NearPlane;
+			if (static_cast<int32>(ERHIZBuffer::IsInverted))
+			{
+				ProjectionMatrix = FReversedZOrthoMatrix(
+					OrthoHalfWidth,
+					OrthoHalfHeight,
+					ZScale,
+					ZOffset
+				);
+			}
+			else
+			{
+				ProjectionMatrix = FOrthoMatrix(
+					OrthoHalfWidth,
+					OrthoHalfHeight,
+					ZScale,
+					ZOffset
+				);
+			}
+		}
+		else
+		{
+			const float FOV = Camera->FieldOfView * (PI / 360.f);
+			BuildProjectionMatrix(CaptureSize,FOV,ClippingPlane,ProjectionMatrix);
+		}
+		
 		FSceneInterface::FCustomRenderPassRendererInput PassInput;
 		PassInput.ViewLocation = ViewLocation;
 		PassInput.ViewRotationMatrix = ViewRotationMatrix;
@@ -102,18 +129,26 @@ void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth()
 
 		TSet<FPrimitiveComponentId> ComponentsToRenderInDepthPass;
 		USkeletalMeshComponent* MeshComponent = Cast<USkeletalMeshComponent>(GetOwner()->GetComponentByClass(USkeletalMeshComponent::StaticClass()));
-		if (MeshComponent)
+		for (auto& Mesh : Meshes)
 		{
-			ComponentsToRenderInDepthPass.Add(MeshComponent->GetPrimitiveSceneId());
+			ComponentsToRenderInDepthPass.Add(Mesh->GetPrimitiveSceneId());
 		}
-		PassInput.ShowOnlyPrimitives = MoveTemp(ComponentsToRenderInDepthPass);
-	
-		FInteractiveRenderingDepthPass* CustomDepthPass = new FInteractiveRenderingDepthPass(CaptureSize);
+		
+		CustomDepthPass = new FInteractiveRenderingDepthPass(CaptureSize);
 		CustomDepthPass->SetRenderTargetTexture(CaptureRenderTarget->GameThread_GetRenderTargetResource());
+		
+		PassInput.ShowOnlyPrimitives = MoveTemp(ComponentsToRenderInDepthPass);
 		PassInput.CustomRenderPass = CustomDepthPass;
 	
 		Scene->CustomRenderPassRendererInputs.Add(PassInput);
+		
+		
 	}
+}
+
+UTextureRenderTarget2D* UCustomMeshInfoCaptureComponent::GetInfoRenderTarget()
+{
+	return CaptureRenderTarget;
 }
 
 FViewport* UCustomMeshInfoCaptureComponent::GetGameOrEditorViewport()

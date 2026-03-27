@@ -21,6 +21,7 @@ public:
 	FInteractiveRenderingDepthPass(const FIntPoint& InRenderTargetSize);
 
 	virtual void OnPreRender(FRDGBuilder& GraphBuilder) override;
+	virtual void OnPostRender(FRDGBuilder& GraphBuilder) override;
 
 	void SetRenderTargetTexture(FRenderTarget* InRenderTargetTexture);
 
