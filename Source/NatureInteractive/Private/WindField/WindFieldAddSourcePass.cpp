@@ -21,7 +21,7 @@ class FWindFieldComputeShader_AddSourceCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldSourceYOutput)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldSourceZOutput)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FWindMotorRenderData>, WindMotorBuffer)
-		SHADER_PARAMETER(FVector3f,WindFieldWorldPosition)
+		SHADER_PARAMETER(FVector4f,WindFieldWorldPosition)
 		SHADER_PARAMETER(float,UnitSize)
 		SHADER_PARAMETER(float,DeltaTime)
 		SHADER_PARAMETER(UINT,MotorNum)

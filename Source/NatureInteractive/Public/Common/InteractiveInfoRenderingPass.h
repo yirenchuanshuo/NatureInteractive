@@ -27,3 +27,4 @@ public:
 
 	FRenderTarget* InteractiveInfoRenderTarget = nullptr;
 };
+

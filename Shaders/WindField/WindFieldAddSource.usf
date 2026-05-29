@@ -18,7 +18,7 @@ Texture3D<float> WindFieldSourceZPrevious;
 RWTexture3D<float> WindFieldSourceXOutput;
 RWTexture3D<float> WindFieldSourceYOutput;
 RWTexture3D<float> WindFieldSourceZOutput;
-float3 WindFieldWorldPosition;
+float4 WindFieldWorldPosition;
 float UnitSize;
 float DeltaTime;
 uint MotorNum;
@@ -33,7 +33,7 @@ void WindFieldAddSourceCS(uint3 ThreadId : SV_DispatchThreadID)
 	float YForce = WindFieldSourceYPrevious[ThreadId] ;
 	float ZForce = WindFieldSourceZPrevious[ThreadId] ;
 	
-	float3 Position = ThreadId.xyz * UnitSize + WindFieldWorldPosition;
+	float3 Position = ThreadId.xyz * UnitSize + WindFieldWorldPosition.xyz;
 
 	for(uint i=0;i<MotorNum;i++)
 	{

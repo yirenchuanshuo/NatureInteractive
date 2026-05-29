@@ -8,6 +8,7 @@
 #include "CustomMeshInfoCaptureComponent.generated.h"
 
 
+class UTextureRenderTarget;
 class UCameraComponent;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
@@ -24,7 +25,8 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-	void CaptureCustomMeshDepth(const UCameraComponent* Camera,TArray<UMeshComponent*> Meshes);
+	void CaptureCustomMeshDepth(const UCameraComponent* Camera,TArray<UMeshComponent*>& Meshes);
+	void SetRenderTargetTexture(UTextureRenderTarget2D* RenderTarget);
 	
 	UTextureRenderTarget2D* GetInfoRenderTarget();
 	

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Templates/PimplPtr.h"
 #include "WindField/WindFieldRender.h"
 #include "WindField/FWindMotorRenderData.h"
 #include "WindField.generated.h"
@@ -41,6 +42,6 @@ public:
 	UPROPERTY(Transient)
 	TArray<UWindMotorComponent*>WindMotorComponents;
 
-	TUniquePtr<WindFieldRender> WindFieldRenderManager;
-	TUniquePtr<FWindMotorRenderDataManager> WindMotorRenderDataManager;
+	TPimplPtr<WindFieldRender> WindFieldRenderManager;
+	TPimplPtr<FWindMotorRenderDataManager> WindMotorRenderDataManager;
 };

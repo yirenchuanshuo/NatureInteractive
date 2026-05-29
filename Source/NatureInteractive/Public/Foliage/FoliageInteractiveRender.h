@@ -1,4 +1,5 @@
 #pragma once
+#include "Templates/PimplPtr.h"
 #include "FoliageInteractiveInitPass.h"
 #include "FoliageInteractiveSimulationPass.h"
 
@@ -16,6 +17,6 @@ public:
 	void Render(const UFoliageInteractiveAdvanceComponent& FoliageInteractiveAdvanceComponent) const;
 	void Draw(FRHICommandListImmediate& RHICommandList,const UFoliageInteractiveAdvanceComponent& FoliageInteractiveAdvanceComponent) const;
 
-	TUniquePtr<FFoliageInteractiveInitPass> InitPass;
-	TUniquePtr<FFoliageInteractiveSimulationPass> SimulationPass;
+	TPimplPtr<FFoliageInteractiveInitPass> InitPass;
+	TPimplPtr<FFoliageInteractiveSimulationPass> SimulationPass;
 };

@@ -4,7 +4,7 @@
 
 FFoliageInteractiveRender::FFoliageInteractiveRender()
 {
-	InitPass = MakeUnique<FFoliageInteractiveInitPass>();
+	InitPass = MakePimpl<FFoliageInteractiveInitPass>();
 }
 
 void FFoliageInteractiveRender::InitRender(

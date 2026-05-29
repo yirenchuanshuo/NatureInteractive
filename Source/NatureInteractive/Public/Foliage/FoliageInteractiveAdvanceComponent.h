@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/PimplPtr.h"
 #include "FoliageInteractiveRender.h"
 #include "Components/SceneComponent.h"
 #include "FoliageInteractiveAdvanceComponent.generated.h"
@@ -80,7 +81,7 @@ public:
 
 	FVector3f PreviousPosition;
 	
-	TUniquePtr<FFoliageInteractiveRender> FoliageInteractiveRender;
+	TPimplPtr<FFoliageInteractiveRender> FoliageInteractiveRender;
 	TSharedPtr<FFoliageInteractiveInitData> InitData;
 	TSharedPtr<FFoliageInteractiveSimulationData> SimulationData;
 

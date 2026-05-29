@@ -1,5 +1,6 @@
 #include "Fluid/FluidAddTrackPass.h"
 #include "DataDrivenShaderPlatformInfo.h"
+#include "InteractiveRenderingResource.h"
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 #include "ShaderParameterStruct.h"

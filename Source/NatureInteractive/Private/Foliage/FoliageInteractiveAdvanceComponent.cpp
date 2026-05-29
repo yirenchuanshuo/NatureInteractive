@@ -17,7 +17,7 @@ UFoliageInteractiveAdvanceComponent::UFoliageInteractiveAdvanceComponent()
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = true;
 	// ...
-	FoliageInteractiveRender = MakeUnique<FFoliageInteractiveRender>();
+	FoliageInteractiveRender = MakePimpl<FFoliageInteractiveRender>();
 	InitData = MakeShared<FFoliageInteractiveInitData>();
 	SimulationData = MakeShared<FFoliageInteractiveSimulationData>();
 

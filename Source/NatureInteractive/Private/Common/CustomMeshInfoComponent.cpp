@@ -4,7 +4,7 @@
 #include "Common/CustomMeshInfoComponent.h"
 
 #include "EngineUtils.h"
-#include "Common/CustomDepthCapture.h"
+#include "Common/CustomDataCapture.h"
 
 
 // Sets default values for this component's properties
@@ -22,8 +22,8 @@ UCustomMeshInfoComponent::UCustomMeshInfoComponent()
 void UCustomMeshInfoComponent::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// ...
+	
+	
 	GetOwnerMeshes();
 	RegisterMeshInfo();
 }
@@ -57,7 +57,7 @@ void UCustomMeshInfoComponent::RegisterMeshInfo() const
 {
 	if (UWorld* World = GetWorld())
 	{
-		for (TActorIterator<ACustomDepthCapture> It(World);It;++It)
+		for (TActorIterator<ACustomDataCapture> It(World);It;++It)
 		{
 			It->AddMesh(this);
 		}
@@ -68,7 +68,7 @@ void UCustomMeshInfoComponent::UnRegisterMeshInfo() const
 {
 	if (UWorld* World = GetWorld())
 	{
-		for (TActorIterator<ACustomDepthCapture> It(World);It;++It)
+		for (TActorIterator<ACustomDataCapture> It(World);It;++It)
 		{
 			It->RemoveMesh(this);
 		}

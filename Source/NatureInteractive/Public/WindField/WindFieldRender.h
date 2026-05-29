@@ -1,4 +1,5 @@
 #pragma once
+#include "Templates/PimplPtr.h"
 #include "WindFieldAddSourcePass.h"
 #include "WindFieldDiffusionPass.h"
 #include "WindFieldAdvectPass.h"
@@ -16,10 +17,10 @@ public:
 	void Render(const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const;
 	void Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const;
 
-	TUniquePtr<WindFieldOffsetPass> OffsetPass;
-	TUniquePtr<WindFieldAddSourcePass> AddSourcePass;
-	TUniquePtr<WindFieldDiffusionPass> DiffusionPass;
-	TUniquePtr<WindFieldAdvectPass>	AdvectPass;
-	TUniquePtr<WindFieldProjectPass> ProjectPass;
-	TUniquePtr<WindFieldExportDataPass> ExportDataPass;
+	TPimplPtr<WindFieldOffsetPass> OffsetPass;
+	TPimplPtr<WindFieldAddSourcePass> AddSourcePass;
+	TPimplPtr<WindFieldDiffusionPass> DiffusionPass;
+	TPimplPtr<WindFieldAdvectPass>	AdvectPass;
+	TPimplPtr<WindFieldProjectPass> ProjectPass;
+	TPimplPtr<WindFieldExportDataPass> ExportDataPass;
 };

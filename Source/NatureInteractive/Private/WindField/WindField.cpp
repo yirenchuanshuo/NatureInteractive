@@ -14,8 +14,8 @@ AWindField::AWindField()
 	WindFieldComponent = CreateDefaultSubobject<UWindFieldComponent>(TEXT("WindFieldComponent"));
 	RootComponent = WindFieldComponent;
 
-	WindFieldRenderManager = MakeUnique<WindFieldRender>();
-	WindMotorRenderDataManager = MakeUnique<FWindMotorRenderDataManager>();
+	WindFieldRenderManager = MakePimpl<WindFieldRender>();
+	WindMotorRenderDataManager = MakePimpl<FWindMotorRenderDataManager>();
 }
 
 // Called when the game starts or when spawned

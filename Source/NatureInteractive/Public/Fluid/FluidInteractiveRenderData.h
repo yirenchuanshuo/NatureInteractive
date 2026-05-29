@@ -1,13 +1,12 @@
 #pragma once
-#include "InteractiveRenderingResourcce.h"
 
 class UFluidInteractiveComponent;
 
 class FFluidInteractiveRenderData
 {
 public:
-	UINT SizeX = 256;
-	UINT SizeY = 256;
+	int32 SizeX = 256;
+	int32 SizeY = 256;
 	EPixelFormat OutputUAVFormat = PF_FloatRGBA;
 	ERHIFeatureLevel::Type FeatureLevel = ERHIFeatureLevel::SM5;
 

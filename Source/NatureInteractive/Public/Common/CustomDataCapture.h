@@ -3,21 +3,23 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "FMeshVelocityRenderData.h"
 #include "GameFramework/Actor.h"
-#include "CustomDepthCapture.generated.h"
+#include "CustomDataCapture.generated.h"
 
+class UMeshVelocityCaptureComponent;
 class UCustomMeshInfoComponent;
 class UCameraComponent;
 class UCustomMeshInfoCaptureComponent;
 
 UCLASS()
-class NATUREINTERACTIVE_API ACustomDepthCapture : public AActor
+class NATUREINTERACTIVE_API ACustomDataCapture : public AActor
 {
 	GENERATED_BODY()
 
 public:
 	// Sets default values for this actor's properties
-	ACustomDepthCapture();
+	ACustomDataCapture();
 
 protected:
 	// Called when the game starts or when spawned
@@ -31,6 +33,8 @@ public:
 	
 	void RemoveMesh(const UCustomMeshInfoComponent* MeshInfoComponent);
 	
+	FMeshVelocityRecord& FindOrAddMeshVelocityRecord(TArray<FMeshVelocityRecord>& InOutRecords,UMeshComponent* Mesh);
+	
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<USceneComponent>	SceneComponent;
 	
@@ -40,6 +44,20 @@ public:
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UCustomMeshInfoCaptureComponent> MeshDepthCaptureComponent;
 	
+	UPROPERTY(EditDefaultsOnly)
+	TObjectPtr<UMeshVelocityCaptureComponent> VelocityCaptureComponent;
+	
+	UPROPERTY(EditDefaultsOnly)
+	TObjectPtr<UTextureRenderTarget2D> CaptureRenderTarget;
+	
+	UPROPERTY(EditDefaultsOnly)
+	TObjectPtr<UTextureRenderTarget2D> VelocityRenderTarget;
+	
+	UPROPERTY(EditDefaultsOnly)
+	bool bCaptureVelocity = false;
+	
 	UPROPERTY(Transient)
 	TArray<UMeshComponent*> Meshes;
+	
+	TArray<FMeshVelocityRecord> MeshVelocityRecords;
 };

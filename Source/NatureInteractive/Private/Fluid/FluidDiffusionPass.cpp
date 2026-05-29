@@ -1,6 +1,7 @@
 
 #include "Fluid/FluidDiffusionPass.h"
 #include "DataDrivenShaderPlatformInfo.h"
+#include "InteractiveRenderingResource.h"
 #include "RenderGraphUtils.h"
 #include "ShaderParameterStruct.h"
 #include "Fluid/FluidInteractiveRenderData.h"

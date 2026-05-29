@@ -4,12 +4,12 @@
 
 WindFieldRender::WindFieldRender()
 {
-	OffsetPass = MakeUnique<WindFieldOffsetPass>();
-	AddSourcePass = MakeUnique<WindFieldAddSourcePass>();
-	DiffusionPass = MakeUnique<WindFieldDiffusionPass>();
-	AdvectPass = MakeUnique<WindFieldAdvectPass>();
-	ProjectPass = MakeUnique<WindFieldProjectPass>();
-	ExportDataPass = MakeUnique<WindFieldExportDataPass>();
+	OffsetPass = MakePimpl<WindFieldOffsetPass>();
+	AddSourcePass = MakePimpl<WindFieldAddSourcePass>();
+	DiffusionPass = MakePimpl<WindFieldDiffusionPass>();
+	AdvectPass = MakePimpl<WindFieldAdvectPass>();
+	ProjectPass = MakePimpl<WindFieldProjectPass>();
+	ExportDataPass = MakePimpl<WindFieldExportDataPass>();
 }
 
 void WindFieldRender::Render(const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const

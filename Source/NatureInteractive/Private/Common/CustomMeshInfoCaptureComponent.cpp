@@ -59,7 +59,7 @@ void UCustomMeshInfoCaptureComponent::BeginPlay()
 // Called every frame
 
 
-void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth(const UCameraComponent* Camera,TArray<UMeshComponent*> Meshes)
+void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth(const UCameraComponent* Camera,TArray<UMeshComponent*>& Meshes)
 {
 	
 	TWeakObjectPtr<UWorld> WorldPtr = GetWorld();
@@ -129,7 +129,7 @@ void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth(const UCameraCompon
 
 		TSet<FPrimitiveComponentId> ComponentsToRenderInDepthPass;
 		USkeletalMeshComponent* MeshComponent = Cast<USkeletalMeshComponent>(GetOwner()->GetComponentByClass(USkeletalMeshComponent::StaticClass()));
-		for (auto& Mesh : Meshes)
+		for (const auto Mesh : Meshes)
 		{
 			ComponentsToRenderInDepthPass.Add(Mesh->GetPrimitiveSceneId());
 		}
@@ -142,8 +142,12 @@ void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth(const UCameraCompon
 	
 		Scene->CustomRenderPassRendererInputs.Add(PassInput);
 		
-		
 	}
+}
+
+void UCustomMeshInfoCaptureComponent::SetRenderTargetTexture(UTextureRenderTarget2D* RenderTarget)
+{
+	CaptureRenderTarget = RenderTarget;
 }
 
 UTextureRenderTarget2D* UCustomMeshInfoCaptureComponent::GetInfoRenderTarget()

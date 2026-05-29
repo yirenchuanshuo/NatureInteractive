@@ -1,0 +1,29 @@
+﻿#include "/Engine/Private/Common.ush"
+Texture2D<float> SnowInput;
+RWTexture2D<float4> SnowOutput;
+float InteractiveHeight;
+float InteractiveDistance;
+float CaptureZ;
+float FadeSpeed;
+float DeltaTime;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void SnowAddTrackCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	// SnowInput 里存的是从相机（顶视）捕获得到的"物体表面相对深度"
+	// 脚底世界 Z = CaptureZ + Depth（如果 Depth 是从相机处向下的距离，则需要减）
+	float Depth = SnowInput[ThreadId.xy].x;
+	float FootZ = CaptureZ + Depth;           // 如果你当前公式用的是 "+"，就保持 "+"
+
+	// 只有脚底低于雪面时才算"压进雪里"
+	//   Penetration > 0 → 陷进雪里多深
+	//   Penetration <=0 → 悬空 / 恰好贴着 → 没有痕迹
+	float Penetration = InteractiveHeight-FootZ;
+
+	// 陷入越深痕迹越强，达到 InteractiveDistance 就饱和
+	float Force = saturate(Penetration / InteractiveDistance);
+
+	float3 SnowTrack = SnowOutput[ThreadId.xy].xyz - DeltaTime * FadeSpeed;
+	SnowTrack.r = max(SnowTrack.r , Force);
+	SnowOutput[ThreadId.xy] = float4(SnowTrack, 1);
+}

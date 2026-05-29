@@ -1,0 +1,76 @@
+﻿#include "/Engine/Private/Common.ush"
+
+struct FMeshVelocityContactBody
+{
+	float4x4 WorldToLocal;
+	float3 HalfExtent;
+	float Pad0;
+	float3 LinearVelocity;
+	float Pad1;
+};
+
+Texture2D<float> DepthInput;
+RWTexture2D<float4> VelocityOutput;
+StructuredBuffer<FMeshVelocityContactBody> ContactBodies;
+
+float4 CaptureLocationAndZ;
+int2 OutputSize;
+float CaptureRange;
+float SoftEdge;
+uint NumContactBodies;
+
+float2 PixelToWorldXY(uint2 PixelId)
+{
+	float2 UV = (float2(PixelId)+0.5)/float2(OutputSize);
+	float2 LocalXY = (UV * 2.0 - 1.0) * CaptureRange;
+	return LocalXY + CaptureLocationAndZ.xy;
+}
+
+float SDFBoxLocal(float3 LocalPos, float3 HalfExtent)
+{
+	float3 Q = abs(LocalPos) - HalfExtent;
+	float OutSide = length(max(Q, 0.0));
+	float Inside = min(max(Q.x, max(Q.y, Q.z)), 0.0);
+	return OutSide + Inside;
+}
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void MeshVelocityRasterizeCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	uint2 PixelId = ThreadId.xy;
+	if (any(PixelId >= (uint2)OutputSize))
+	{
+		return;
+	}
+	
+	float Depth = DepthInput.Load(int3(PixelId, 0)).x;
+	float FootZ = CaptureLocationAndZ.w + Depth;
+	
+	float2 WorldXY = PixelToWorldXY(PixelId);
+	float3 WorldPos = float3(WorldXY, FootZ);
+	
+	float2 BestVelocity = float2(0,0);
+	float BestWeight = 0;
+	
+	[loop]
+	for (uint i = 0; i < NumContactBodies; ++i)
+	{
+		FMeshVelocityContactBody Body = ContactBodies[i];
+
+		// 世界 → local 空间
+		float3 LocalPos = mul(float4(WorldPos, 1.0), Body.WorldToLocal).xyz;
+
+		// SDF：dist <= 0 在盒内，dist > 0 在盒外
+		float Dist = SDFBoxLocal(LocalPos, Body.HalfExtent);
+
+		// 软边界权重：盒内/边界内 = 1，外侧 SoftEdge 距离内线性衰减到 0
+		float Weight = 1.0 - saturate(Dist / max(SoftEdge, 1e-4));
+
+		if (Weight > BestWeight)
+		{
+			BestWeight   = Weight;
+			BestVelocity = Body.LinearVelocity.xy;
+		}
+	}
+	VelocityOutput[PixelId] = float4(BestVelocity * BestWeight, BestWeight, 1.0);
+}

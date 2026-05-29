@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/PimplPtr.h"
 #include "FluidInteractiveRenderData.h"
 #include "FluidInteractiveRender.h"
 #include "Components/SceneComponent.h"
@@ -80,16 +81,18 @@ public:
 
 	FVector PreviousLocation;
 	FVector CurrentLocation;
-	TUniquePtr<FFluidInteractiveRender> FluidInteractiveRender;
+	TPimplPtr<FFluidInteractiveRender> FluidInteractiveRender;
 	TSharedPtr<FFluidInteractiveRenderData> FluidRenderData;
 
 	FTimerHandle FluidInteractiveTimerHandle;
 
-protected:
+public:
 	// Called when the game starts
 	virtual void BeginPlay() override;
 	virtual void PostLoad() override;
+#if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,

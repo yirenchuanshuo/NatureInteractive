@@ -25,7 +25,7 @@ UFluidInteractiveComponent::UFluidInteractiveComponent()
 	FluidOutputPrevious = FluidOutputPreviousFinder.Object;
 	FluidNormal = FluidNormalFinder.Object;
 	
-	FluidInteractiveRender = MakeUnique<FFluidInteractiveRender>();
+	FluidInteractiveRender = MakePimpl<FFluidInteractiveRender>();
 	FluidRenderData = MakeShared<FFluidInteractiveRenderData>();
 	FluidSimulationSize = FVector2D(1024, 1024);
 	TexResolution = FIntPoint(256, 256);
@@ -101,12 +101,12 @@ void UFluidInteractiveComponent::ExChangeRenderTarget()
 void UFluidInteractiveComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	PreviousLocation = GetComponentLocation();
 	FluidOutput->UpdateResourceImmediate();
 	FluidOutputPrevious->UpdateResourceImmediate();
 	FluidCache->UpdateResourceImmediate();
 	FluidNormal->UpdateResourceImmediate();
 	InitRenderData();
-
 	FTimerDelegate TimerDelegate = FTimerDelegate::CreateUObject(this,&UFluidInteractiveComponent::FluidSimulation);
 	GetWorld()->GetTimerManager().SetTimer(FluidInteractiveTimerHandle,TimerDelegate,0.017,true);
 }
@@ -120,6 +120,7 @@ void UFluidInteractiveComponent::PostLoad()
 	FluidNormal->InitAutoFormat(TexResolution.X, TexResolution.Y);
 }
 
+#if WITH_EDITOR
 void UFluidInteractiveComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
@@ -131,7 +132,7 @@ void UFluidInteractiveComponent::PostEditChangeProperty(FPropertyChangedEvent& P
 		FluidNormal->InitAutoFormat(TexResolution.X, TexResolution.Y);
 	}
 }
-
+#endif
 
 // Called every frame
 void UFluidInteractiveComponent::TickComponent(float DeltaTime, ELevelTick TickType,

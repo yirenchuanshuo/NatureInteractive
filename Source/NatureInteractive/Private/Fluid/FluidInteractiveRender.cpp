@@ -1,13 +1,15 @@
 
 #include "Fluid/FluidInteractiveRender.h"
+
+#include "InteractiveRenderingResource.h"
 #include "Fluid/FluidInteractiveComponent.h"
 
 FFluidInteractiveRender::FFluidInteractiveRender()
 {
-	AddTrackPass = MakeUnique<FFluidAddTrackPass>();
-	DiffusionPass = MakeUnique<FFluidDiffusionPass>();
-	OffsetPass = MakeUnique<FFluidOffsetPass>();
-	HeightToNormalPass = MakeUnique<FFluidHeightToNormalPass>();
+	AddTrackPass = MakePimpl<FFluidAddTrackPass>();
+	DiffusionPass = MakePimpl<FFluidDiffusionPass>();
+	OffsetPass = MakePimpl<FFluidOffsetPass>();
+	HeightToNormalPass = MakePimpl<FFluidHeightToNormalPass>();
 }
 
 void FFluidInteractiveRender::Render(const UFluidInteractiveComponent& FluidInteractiveComponent) const
