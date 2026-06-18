@@ -22,6 +22,15 @@ USnowInteractiveComponent::USnowInteractiveComponent()
 	SnowDataParameterCollection = LoadObject<UMaterialParameterCollection>(nullptr, TEXT("/Script/Engine.MaterialParameterCollection'/Game/Scenes/MasterMat/MPC/MPC_Env_Common.MPC_Env_Common'"));
 }
 
+void USnowInteractiveComponent::PostLoad()
+{
+	Super::PostLoad();
+	if (SnowOutputNormal)
+	{
+		SnowOutputNormal->ClearColor = FLinearColor(0.0f, 0.0f, 1.f, 1.f);
+		SnowOutputNormal->UpdateResourceImmediate(true);
+	}
+}
 
 
 // Called when the game starts
@@ -33,7 +42,15 @@ void USnowInteractiveComponent::BeginPlay()
 		SnowInteractiveActor = *It;
 		break;
 	}
+	
+	SnowInteractiveRender->InitRenderProcess(*this);
+	
 	SnowInput = SnowInteractiveActor->CaptureRenderTarget;
+	if (bUseSnowDiffusion)
+	{
+		SnowVelocityInput = SnowInteractiveActor->VelocityRenderTarget;
+	}
+	
 	SnowInteractiveActor->CameraComponent->OrthoWidth = static_cast<float>(SnowInteractiveRange);
 	InitOutputTextureAttributes();
 	InitSnowDataParameterCollection();
@@ -61,13 +78,24 @@ void USnowInteractiveComponent::InitOutputTextureAttributes() const
 	SnowOutput->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
 	SnowOutput->UpdateResourceImmediate(true);
 	
-	SnowOutputBlur->bSupportsUAV = true;
-	SnowOutputBlur->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
-	SnowOutputBlur->UpdateResourceImmediate(true);
+	SnowOutputHeight->bSupportsUAV = true;
+	SnowOutputHeight->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
+	SnowOutputHeight->UpdateResourceImmediate(true);
 	
 	SnowOutputNormal->bSupportsUAV = true;
 	SnowOutputNormal->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
 	SnowOutputNormal->UpdateResourceImmediate(true);
+	
+	if (bUseSnowDiffusion)
+	{
+		SnowVelocityOutput->bSupportsUAV = true;
+		SnowVelocityOutput->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
+		SnowVelocityOutput->UpdateResourceImmediate(true);
+		
+		SnowVelocityHeightOutput->bSupportsUAV = true;
+		SnowVelocityHeightOutput->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
+		SnowVelocityHeightOutput->UpdateResourceImmediate(true);
+	}
 }
 
 void USnowInteractiveComponent::InitSnowDataParameterCollection()
@@ -107,5 +135,10 @@ float USnowInteractiveComponent::GetUnlitSize() const
 {
 	const int32 SizeX = SnowInput->SizeX;
 	return static_cast<float>(SnowInteractiveRange)/static_cast<float>(SizeX);
+}
+
+FVector USnowInteractiveComponent::GetCaptureLocation() const
+{
+	return SnowInteractiveActor->GetActorLocation();
 }
 

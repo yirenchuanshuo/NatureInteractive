@@ -1,0 +1,116 @@
+﻿#include "/Engine/Private/Common.ush"
+
+Texture2D SnowTrackInput;
+SamplerState SnowTrackInputSampler;
+Texture2D SnowPileupNoise;
+SamplerState SnowPileupNoiseSampler;
+RWTexture2D<float4> SnowTrackOutput;
+int2 TextureSize;
+float2 CaptureLocation;
+float2 SnowPileupNoiseMinMax;
+float BlurDistance;
+float InteractiveRange;
+float SnowPileupNoiseScale;
+float SnowPileupNoisePow;
+float SnowPileupHeightScale;
+float SnowFalloffHeightScale;
+
+float4 SpiralBlurTexture(Texture2D Tex,SamplerState TexSampler, float2 UV, float Distance,
+	int DistanceSteps, int RadialSteps, float RadialOffset,float KernelPower)
+{
+	if (DistanceSteps <1 || RadialSteps < 1)
+	{
+		return Texture2DSample(Tex, TexSampler, UV);
+	}
+	
+	const float TwoPi = 6.28318530718;
+	float StepSize = Distance / DistanceSteps;
+	float CurDist = 0.0f;
+	float SubOffset = 0.0f;
+	float AccumW = 0.0f;
+	float4 ColorSum = 0.0f;
+	
+	[loop]
+	for (int i = 0; i < DistanceSteps; ++i)
+	{
+		CurDist += StepSize;
+		
+		[loop]
+		for (int j = 0; j < RadialSteps; ++j)
+		{
+			SubOffset += 1.0f;
+			
+			float Angle = TwoPi * (SubOffset/RadialSteps);
+			float2 Offset = float2(cos(Angle), sin(Angle));
+			float2 NewUV = UV + Offset * CurDist;
+			
+			float w = pow(CurDist, KernelPower);
+			ColorSum += Texture2DSample(Tex,TexSampler, NewUV) * w;
+			AccumW += w;
+		}
+		
+		SubOffset += RadialOffset;
+	}
+	
+	return ColorSum / max(AccumW, 1e-5f);
+}
+
+float RemapValue(float Value, float InMin, float InMax, float OutMin, float OutMax)
+{
+	return (Value - InMin) / (InMax - InMin) * (OutMax - OutMin) + OutMin;
+}
+
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void SnowTrackHeightOutputCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	const float PI = 3.14159265359;
+	
+	int2 Pos = int2(ThreadId.xy);
+	float2 SnowTrackData = SnowTrackInput[Pos].xy;
+	
+	
+	float2 PosUV = (float2(Pos) + 0.5) / TextureSize;
+	PosUV.y = 1.0 - PosUV.y;
+	float2 WorldXY = CaptureLocation + PosUV * InteractiveRange - InteractiveRange * 0.5;
+	float2 NoiseUV = WorldXY * SnowPileupNoiseScale;
+	float SnowPileupNoiseValue = Texture2DSample(SnowPileupNoise, SnowPileupNoiseSampler, NoiseUV).r;
+	SnowPileupNoiseValue = pow(SnowPileupNoiseValue, SnowPileupNoisePow);
+	SnowPileupNoiseValue = lerp(SnowPileupNoiseMinMax.x, SnowPileupNoiseMinMax.y, SnowPileupNoiseValue);
+	float SnowFalloffNoiseValue = Texture2DSample(SnowPileupNoise, SnowPileupNoiseSampler, NoiseUV * 2 + float2(3.225,3.225)).r;
+	SnowFalloffNoiseValue = pow(SnowFalloffNoiseValue, SnowPileupNoisePow);
+	SnowFalloffNoiseValue = lerp(SnowPileupNoiseMinMax.x, SnowPileupNoiseMinMax.y, SnowFalloffNoiseValue);
+	
+	float2 UV = (float2(Pos) + 0.5) / float2(TextureSize);
+	float2 SnowBlurData = SpiralBlurTexture(SnowTrackInput, SnowTrackInputSampler,UV, BlurDistance,16,8,0.618, 1.0).xy;
+	
+	float2 SnowPileupData = saturate(sin(saturate(SnowBlurData - SnowTrackData) * PI * 0.5));
+	float SnowTrackHeight = (1-SnowTrackData.x*0.5) * 0.5;
+	float SnowPileupHeight = SnowPileupData.x * SnowPileupNoiseValue * SnowPileupHeightScale;
+	float SnowFalloffHeight = SnowPileupData.y * SnowFalloffNoiseValue * SnowFalloffHeightScale;
+	float SnowPileupHeightWithFalloff = SnowPileupHeight + SnowFalloffHeight;
+	
+	float TrackMask = SnowTrackData.x + SnowPileupHeightWithFalloff;
+	
+	float FinalHeight = SnowTrackHeight+SnowPileupHeightWithFalloff;
+	
+	
+	SnowTrackOutput[Pos] = float4(FinalHeight,FinalHeight,FinalHeight,TrackMask);
+}
+
+Texture2D<float4> SnowVelocityInput;
+RWTexture2D<float4> SnowVelocityHeightOutput;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void SnowVelocityHeightOutputCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	float2 Pos = (float2)ThreadId.xy;
+	
+	float2 V = SnowVelocityInput.Load(int3(ThreadId.xy, 0)).xy;
+	float Speed = length(V);
+	float Height = Speed * 0.05;
+
+	SnowVelocityHeightOutput[ThreadId.xy] = float4(Height, Height, Height, 1.0);
+}
+
+

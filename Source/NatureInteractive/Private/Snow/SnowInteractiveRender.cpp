@@ -1,14 +1,27 @@
 
 #include "Snow/SnowInteractiveRender.h"
 
-#include "Snow/SnowGaussianBlurPass.h"
+#include "Snow/SnowAdvectPass.h"
+#include "Snow/SnowDataOutputPass.h"
+#include "Snow/SnowDiffusionPass.h"
 #include "Snow/SnowInteractiveComponent.h"
+#include "Snow/SnowProjectPass.h"
+#include "Snow/SnowTrackBlurPass.h"
 
 FSnowInteractiveRender::FSnowInteractiveRender()
 {
 	OffsetPass = MakePimpl<FSnowOffsetPass>();
 	AddTrackPass = MakePimpl<FSnowAddTrackPass>();
-	GaussianBlurPass = MakePimpl<FSnowGaussianBlurPass>();
+	TrackBlurPass = MakePimpl<FSnowTrackBlurPass>();
+	SnowDataOutputPass = MakePimpl<FSnowDataOutputPass>();
+	DiffusionPass = MakePimpl<FSnowDiffusionPass>();
+	AdvectPass = MakePimpl<FSnowAdvectPass>();
+	ProjectPass = MakePimpl<FSnowProjectPass>();
+}
+
+void FSnowInteractiveRender::InitRenderProcess(const USnowInteractiveComponent& SnowInteractiveComponent)
+{
+	bRenderDiffusionData = SnowInteractiveComponent.bUseSnowDiffusion;
 }
 
 void FSnowInteractiveRender::Render(const USnowInteractiveComponent& SnowInteractiveComponent) const
@@ -32,8 +45,16 @@ void FSnowInteractiveRender::Draw(FRHICommandListImmediate& RHICommandList, cons
 {
 	OffsetPass->Draw(RHICommandList,RenderData);
 	AddTrackPass->Draw(RHICommandList,RenderData);
-	if (RenderData->BlurRadius > 0 && RenderData->BlurSigma > 0.f)
+	TrackBlurPass->Draw(RHICommandList,RenderData);
+	SnowDataOutputPass->Draw(RHICommandList,RenderData);
+	
+	if (bRenderDiffusionData)
 	{
-		GaussianBlurPass->Draw(RHICommandList,RenderData);
+		AddTrackPass->DrawVelocity(RHICommandList,RenderData);
+		DiffusionPass->Draw(RHICommandList,RenderData);
+		AdvectPass->Draw(RHICommandList,RenderData);
+		ProjectPass->Draw(RHICommandList,RenderData);
+		OffsetPass->DrawVelocity(RHICommandList,RenderData);
+		SnowDataOutputPass->DrawVelocity(RHICommandList,RenderData);
 	}
 }

@@ -1,8 +1,8 @@
-#pragma once
+﻿#pragma once
 
 class FSnowInteractiveRenderData;
 
-class FSnowGaussianBlurPass
+class FSnowTrackBlurPass
 {
 public:
 	void Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData);

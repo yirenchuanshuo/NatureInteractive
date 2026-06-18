@@ -1,0 +1,33 @@
+﻿#include "/Engine/Private/Common.ush"
+Texture2D<float4> SnowVelocityInput;
+RWTexture2D<float4> SnowDiffusionOutput;
+float DeltaTime;
+float TexSize;
+float Diffusion;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void SnowDiffusionCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	int2 Pos = ThreadId.xy;
+	
+	int2 PosRight = Pos + int2(1,0);
+	int2 PosLeft = Pos + int2(-1,0);
+	int2 PosDown = Pos + int2(0,1);
+	int2 PosUp = Pos + int2(0,-1);
+	
+	// Handle edge cases by clamping to the border
+	PosRight = min(PosRight, int2(TexSize-1, TexSize-1));
+	PosLeft = max(PosLeft, int2(0, 0));
+	PosDown = min(PosDown, int2(TexSize-1, TexSize-1));
+	PosUp = max(PosUp, int2(0, 0));
+	
+	float3 V0 = float3(SnowVelocityInput[Pos].xy, 0);
+	float3 VRight = float3(SnowVelocityInput[PosRight].xy, 0);
+	float3 VLeft = float3(SnowVelocityInput[PosLeft].xy, 0);
+	float3 VDown = float3(SnowVelocityInput[PosDown].xy, 0);
+	float3 VUp = float3(SnowVelocityInput[PosUp].xy, 0);
+	
+	float A = DeltaTime * Diffusion * TexSize * TexSize;
+	float3 Velocity = ((VRight + VLeft + VDown + VUp ) * A + V0)/(1 + 4 * A);
+	SnowDiffusionOutput[Pos] = float4(Velocity,1);
+}

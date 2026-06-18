@@ -1,11 +1,9 @@
-#pragma once
-
+﻿#pragma once
 
 class FSnowInteractiveRenderData;
 
-class FSnowAddTrackPass
+class FSnowAdvectPass
 {
 public:
 	void Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData);
-	void DrawVelocity(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData);
 };

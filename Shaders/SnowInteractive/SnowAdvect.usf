@@ -1,0 +1,51 @@
+﻿#include "/Engine/Private/Common.ush"
+
+Texture2D SnowDiffusionInput;
+RWTexture2D<float4> SnowAdvectOutput;
+float DeltaTime;
+float TexSize;
+float Viscosity;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void SnowAdvectCS(uint3 DispatchThreadId : SV_DispatchThreadID)
+{
+	
+	float2 Pos = (float2)DispatchThreadId.xy + 0.5;
+	
+	float2 V0 = SnowDiffusionInput.Load(int3(DispatchThreadId.xy, 0)).xy;
+	
+	float DT0 = DeltaTime * TexSize;
+	
+	float2 Step = V0 * DT0;
+	const float MaxStep = 4;
+	float StepLen = length(Step);
+	if(StepLen > MaxStep) Step *= MaxStep / StepLen;
+	
+	
+	float2 Back = Pos - Step;
+	Back = clamp(Back,0.5,TexSize - 0.5);
+	
+	int2 I0 = (int2)floor(Back-0.5);
+	int2 I1 = I0 + 1;
+	I0 = clamp(I0, int2(0,0), int2(TexSize-1, TexSize-1));
+	I1 = clamp(I1, int2(0,0), int2(TexSize-1, TexSize-1));
+	float2 F = (Back - 0.5) - (float2)I0;
+	
+	float2 V00 = SnowDiffusionInput.Load(int3(I0.x,	I0.y,0)).xy;
+	float2 V10 = SnowDiffusionInput.Load(int3(I1.x, I0.y, 0)).xy;
+	float2 V01 = SnowDiffusionInput.Load(int3(I0.x, I1.y, 0)).xy;
+	float2 V11 = SnowDiffusionInput.Load(int3(I1.x, I1.y, 0)).xy;
+	
+	float2 Vx0 = lerp(V00, V10, F.x);
+	float2 Vx1 = lerp(V01, V11, F.x);
+	float2 V = lerp(Vx0, Vx1, F.y);
+	
+	//float A = Viscosity * DeltaTime;
+	//V.x = V.x>0 ? max(V.x - A, 0) : min(V.x + A, 0);
+	//V.y = V.y>0 ? max(V.y - A, 0) : min(V.y + A, 0);
+	float Damp = saturate(1 - Viscosity * DeltaTime);
+	V *= Damp;
+	//V.xy =  select(abs(V.xy) < 1e-3, float2(0,0), V.xy);
+	
+	SnowAdvectOutput[DispatchThreadId.xy] = float4(V,0,1);
+}

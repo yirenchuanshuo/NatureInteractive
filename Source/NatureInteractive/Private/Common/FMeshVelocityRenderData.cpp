@@ -27,9 +27,13 @@ void FMeshVelocityRenderData::InitRenderData(const UMeshVelocityCaptureComponent
 	
 	FeatureLevel = CaptureComponent.GetWorld()->GetFeatureLevel();
 	
-	const FVector ActorLocation = CustomDataCapture->GetActorLocation();
-	CaptureLocation = FVector3f(ActorLocation);
-	CaptureZ = ActorLocation.Z;
-	CaptureRange = CustomDataCapture->CameraComponent->OrthoWidth;
-	SoftEdge = CaptureComponent.SoftEdge;
+	const UCameraComponent* CameraComponent = CustomDataCapture->CameraComponent;
+	const FVector CameraLocation = CameraComponent->GetComponentLocation();
+	
+	CaptureLocation = FVector3f(CameraLocation);
+	CaptureZ = CameraLocation.Z;
+	CaptureRange = CameraComponent->OrthoWidth;
+	
+	InteractiveHeight = CaptureComponent.InteractiveHeight;
+	InteractiveDistance = CaptureComponent.InteractiveDistance;
 }

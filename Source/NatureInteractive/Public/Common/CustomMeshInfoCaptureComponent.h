@@ -29,8 +29,6 @@ public:
 	void SetRenderTargetTexture(UTextureRenderTarget2D* RenderTarget);
 	
 	UTextureRenderTarget2D* GetInfoRenderTarget();
-	
-	FViewport* GetGameOrEditorViewport();
 
 	UPROPERTY(EditDefaultsOnly, Category = "Render")
 	TObjectPtr<UTextureRenderTarget2D> CaptureRenderTarget;

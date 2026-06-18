@@ -37,10 +37,13 @@ public:
 	UTextureRenderTarget2D* GetVelocityRenderTarget() const;
 	
 	UPROPERTY(EditDefaultsOnly, Category="Velocity")
-	float SoftEdge = 20.f;
+	float ExtraPadding = 5.f;
 	
 	UPROPERTY(EditDefaultsOnly, Category="Velocity")
-	float ExtraPadding = 5.f;
+	float InteractiveHeight = 30.f;
+	
+	UPROPERTY(EditDefaultsOnly, Category="Velocity")
+	float InteractiveDistance = 10.f;
 	
 protected:
 	UPROPERTY(EditDefaultsOnly, Category="Velocity")
@@ -48,7 +51,6 @@ protected:
 	
 	UPROPERTY(Transient)
 	TObjectPtr<UTextureRenderTarget2D> DepthSourceRenderTarget;
-	
 private:
 	TPimplPtr<FMeshVelocityRender> MeshVelocityRender;
 	FMeshVelocityRenderData VelocityRenderData;

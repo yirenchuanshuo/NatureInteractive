@@ -3,6 +3,7 @@
 
 #include "Common/MeshVelocityCaptureComponent.h"
 
+#include "Camera/CameraComponent.h"
 #include "Common/CustomDataCapture.h"
 #include "Common/FMeshVelocityRenderData.h"
 #include "Common/MeshVelocityRender.h"
@@ -65,33 +66,58 @@ void UMeshVelocityCaptureComponent::CaptureMeshVelocity(const UCameraComponent* 
 	VelocityRenderData.ContactBodies.Reset();
 	VelocityRenderData.ContactBodies.Reserve(Meshes.Num());
 	
+	const FIntPoint CaptureSize(VelocityRenderData.SizeX, VelocityRenderData.SizeY);
+	const FVector2f CameraXY = FVector2f(VelocityRenderData.CaptureLocation.X, VelocityRenderData.CaptureLocation.Y);
+	const float HalfRange = VelocityRenderData.CaptureRange * 0.5f;
+	const FVector2f ViewMin(CameraXY.X-HalfRange, CameraXY.Y-HalfRange);
+	const FVector2f ViewMax(CameraXY.X+HalfRange, CameraXY.Y+HalfRange);
+	
 	for (UMeshComponent* Mesh : Meshes)
 	{
 		FMeshVelocityRecord& Record = CustomDataCapture->FindOrAddMeshVelocityRecord(InOutRecords, Mesh);
 		const FVector CurrentLocation = Mesh->GetComponentLocation();
-		const FQuat CurrentRotation = Mesh->GetComponentQuat();
 		
 		FVector LinearVelocity = FVector::ZeroVector;
-		if (DeltaTime>KINDA_SMALL_NUMBER)
+		if (UPrimitiveComponent* Prim = Cast<UPrimitiveComponent>(Mesh);Prim && Prim->IsSimulatingPhysics())
+		{
+			LinearVelocity = Prim->GetPhysicsLinearVelocity();
+		}
+		else if (DeltaTime>KINDA_SMALL_NUMBER)
 		{
 			LinearVelocity = (CurrentLocation - Record.PrevLocation) / DeltaTime;
 		}
 		
-		const FBoxSphereBounds LocalBounds = Mesh->CalcLocalBounds();
+		const FBoxSphereBounds LocalBounds = Mesh->Bounds;
+		const FVector Pad(ExtraPadding);
+		const FVector WorldMin = LocalBounds.Origin - LocalBounds.BoxExtent - Pad;
+		const FVector WorldMax = LocalBounds.Origin + LocalBounds.BoxExtent + Pad;
+		
+		FVector2f XYMin(WorldMin.X, WorldMin.Y);
+		FVector2f XYMax(WorldMax.X, WorldMax.Y);
+		
+		
+		if (XYMax.X<ViewMin.X || XYMin.X>ViewMax.X || XYMax.Y<ViewMin.Y || XYMin.Y>ViewMax.Y)
+		{
+			Record.PrevLocation = CurrentLocation;
+			Record.PrevRotation = Mesh->GetComponentQuat();
+			continue;
+		}
+		
 		FMeshVelocityContactBody ContactBody;
-		ContactBody.WorldToLocal = FMatrix44f(Mesh->GetComponentTransform().ToInverseMatrixWithScale());
-		ContactBody.HalfExtent = FVector3f(LocalBounds.BoxExtent + FVector(ExtraPadding));
-		ContactBody.LinearVelocity = FVector3f(LinearVelocity);
+		ContactBody.WorldMin = XYMin;
+		ContactBody.WorldMax = XYMax;
+		ContactBody.LinearVelocity = FVector2f(LinearVelocity.X,LinearVelocity.Y) * 0.01f;
+		
+		
 		VelocityRenderData.ContactBodies.Add(ContactBody);
 		
 		Record.PrevLocation = CurrentLocation;
-		Record.PrevRotation = CurrentRotation;
+		Record.PrevRotation = Mesh->GetComponentQuat();
 	}
 	
-	if (VelocityRenderData.ContactBodies.Num() > 0)
-	{
-		MeshVelocityRender->Render(VelocityRenderData);
-	}
+	
+	MeshVelocityRender->Render(VelocityRenderData);
+	
 }
 
 UTextureRenderTarget2D* UMeshVelocityCaptureComponent::GetVelocityRenderTarget() const

@@ -1,29 +1,56 @@
 ﻿#include "/Engine/Private/Common.ush"
-Texture2D<float> SnowInput;
+Texture2D<float> SnowForceInput;
+Texture2D SnowTrackInput;
 RWTexture2D<float4> SnowOutput;
 float InteractiveHeight;
 float InteractiveDistance;
 float CaptureZ;
 float FadeSpeed;
+float FallingSpeed;
 float DeltaTime;
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void SnowAddTrackCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	// SnowInput 里存的是从相机（顶视）捕获得到的"物体表面相对深度"
-	// 脚底世界 Z = CaptureZ + Depth（如果 Depth 是从相机处向下的距离，则需要减）
-	float Depth = SnowInput[ThreadId.xy].x;
-	float FootZ = CaptureZ + Depth;           // 如果你当前公式用的是 "+"，就保持 "+"
-
-	// 只有脚底低于雪面时才算"压进雪里"
-	//   Penetration > 0 → 陷进雪里多深
-	//   Penetration <=0 → 悬空 / 恰好贴着 → 没有痕迹
+	
+	float Depth = SnowForceInput[ThreadId.xy].x;
+	float FootZ = CaptureZ + Depth;           
+	
 	float Penetration = InteractiveHeight-FootZ;
-
-	// 陷入越深痕迹越强，达到 InteractiveDistance 就饱和
+	
 	float Force = saturate(Penetration / InteractiveDistance);
 
-	float3 SnowTrack = SnowOutput[ThreadId.xy].xyz - DeltaTime * FadeSpeed;
-	SnowTrack.r = max(SnowTrack.r , Force);
-	SnowOutput[ThreadId.xy] = float4(SnowTrack, 1);
+	float SnowTrackTemp = SnowTrackInput[ThreadId.xy].x;
+	SnowTrackTemp = max(SnowTrackTemp.r , Force);
+	float SnowFallingNew = SnowTrackTemp - SnowTrackInput[ThreadId.xy].x;
+	float SnowFallingOld = SnowTrackInput[ThreadId.xy].y - DeltaTime * FallingSpeed;
+	float SnowFallRange = max(SnowFallingNew, SnowFallingOld);
+	
+	float SnowTrack = SnowTrackInput[ThreadId.xy].x - DeltaTime * FadeSpeed;
+	SnowTrack = max(SnowTrack.r , Force);
+	
+	
+	SnowOutput[ThreadId.xy] = float4(SnowTrack,SnowFallRange,0,1);
+}
+
+Texture2D SnowVelocityInput;
+Texture2D SnowVelocityTrackInput;
+RWTexture2D<float4> SnowVelocityTrackOutput;
+float VelocityFadeSpeed;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void SnowAddVelocityTrackCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	uint2 Pos = ThreadId.xy;
+	float3 In = SnowVelocityInput[Pos].xyz;
+	float2 NewV = In.xy;
+	float2 OldV = SnowVelocityTrackInput[Pos].xy;
+	float Force = In.z;
+	
+	float Damp = saturate(1.0-DeltaTime * VelocityFadeSpeed);
+	OldV *= Damp;
+	
+	float2 V = lerp(OldV, NewV, saturate(Force));
+	
+	SnowVelocityTrackOutput[Pos] = float4(V,0,1);
 }

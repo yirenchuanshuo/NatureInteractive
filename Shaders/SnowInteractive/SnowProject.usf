@@ -1,0 +1,91 @@
+﻿#include "/Engine/Private/Common.ush"
+
+Texture2D<float4> SnowAdvectInput;
+RWTexture2D<float4> SnowProjectOutput;
+float TexSize;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void SnowProjectDCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	float H = 1/TexSize;
+	int2 Pos = ThreadId.xy;
+	
+	int2 PosRight = Pos + int2(1,0);
+	int2 PosLeft = Pos - int2(1,0);
+	int2 PosUp = Pos + int2(0,1);
+	int2 PosDown = Pos - int2(0,1);
+	
+	PosRight = min(PosRight, int2(TexSize-1, TexSize-1));
+	PosLeft = max(PosLeft, int2(0, 0));
+	PosUp =  min(PosUp, int2(TexSize-1, TexSize-1));
+	PosDown = max(PosDown, int2(0, 0));
+	
+	float2 V = SnowAdvectInput[Pos].xy;
+	
+	float2 V1 = SnowAdvectInput[PosRight].xy;
+	float2 V2 = SnowAdvectInput[PosLeft].xy;
+	float2 V3 = SnowAdvectInput[PosUp].xy;
+	float2 V4 = SnowAdvectInput[PosDown].xy;
+	
+	float Div = -0.5 * H * (V1.x - V2.x + V3.y - V4.y);
+	float P = 0;
+	
+	SnowProjectOutput[Pos] = float4(V,Div,P);
+}
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void SnowProjectPCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	int2 Pos = ThreadId.xy;
+	
+	int2 PosRight = Pos + int2(1,0);
+	int2 PosLeft = Pos - int2(1,0);
+	int2 PosUp = Pos + int2(0,1);
+	int2 PosDown = Pos - int2(0,1);
+	
+	PosRight = min(PosRight, int2(TexSize-1, TexSize-1));
+	PosLeft = max(PosLeft, int2(0, 0));
+	PosUp =  min(PosUp, int2(TexSize-1, TexSize-1));
+	PosDown = max(PosDown, int2(0, 0));
+	
+	float2 V = SnowAdvectInput[Pos].xy;
+	float Div = SnowAdvectInput[Pos].z;
+	float P1 = SnowAdvectInput[PosRight].w;
+	float P2 = SnowAdvectInput[PosLeft].w;
+	float P3 = SnowAdvectInput[PosUp].w;
+	float P4 = SnowAdvectInput[PosDown].w;
+	
+	float P = (Div + P1 + P2 + P3 + P4) / 4;
+	SnowProjectOutput[Pos] = float4(V,Div,P);
+}
+
+Texture2D<float4> SnowVelocityInput;
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void SnowProjectVCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	float H = 1/TexSize;
+	
+	int2 Pos = ThreadId.xy;
+	
+	int2 PosRight = Pos + int2(1,0);
+	int2 PosLeft = Pos - int2(1,0);
+	int2 PosUp = Pos + int2(0,1);
+	int2 PosDown = Pos - int2(0,1);
+	
+	PosRight = min(PosRight, int2(TexSize-1, TexSize-1));
+	PosLeft = max(PosLeft, int2(0, 0));
+	PosUp =  min(PosUp, int2(TexSize-1, TexSize-1));
+	PosDown = max(PosDown, int2(0, 0));
+	
+	float3 V = float3(SnowAdvectInput[Pos].xy, 0);
+	float P1 = SnowAdvectInput[PosRight].w;
+	float P2 = SnowAdvectInput[PosLeft].w;
+	float P3 = SnowAdvectInput[PosUp].w;
+	float P4 = SnowAdvectInput[PosDown].w;
+	
+	V.x = V.x - 0.5 * (P1 - P2) / H;
+	V.y = V.y - 0.5 * (P3 - P4) / H;
+	
+	SnowProjectOutput[Pos] = float4(V, 0);
+}

@@ -18,7 +18,8 @@ class FMeshVelocityRasterizeCS : public FGlobalShader
 		SHADER_PARAMETER(FVector4f, CaptureLocationAndZ)
 		SHADER_PARAMETER(FIntPoint, OutputSize)
 		SHADER_PARAMETER(float, CaptureRange)
-		SHADER_PARAMETER(float, SoftEdge)
+		SHADER_PARAMETER(float, InteractiveHeight)
+		SHADER_PARAMETER(float, InteractiveDistance)
 		SHADER_PARAMETER(uint32, NumContactBodies)
 	END_SHADER_PARAMETER_STRUCT()
 	
@@ -65,7 +66,8 @@ void FMeshVelocityRasterizePass::Draw(FRHICommandListImmediate& RHICommandList,c
 	MeshVelocityRasterizeParameters->CaptureLocationAndZ = FVector4f(RenderData->CaptureLocation,RenderData->CaptureZ);
 	MeshVelocityRasterizeParameters->OutputSize = FIntPoint(RenderData->SizeX, RenderData->SizeY);
 	MeshVelocityRasterizeParameters->CaptureRange = RenderData->CaptureRange;
-	MeshVelocityRasterizeParameters->SoftEdge = RenderData->SoftEdge;
+	MeshVelocityRasterizeParameters->InteractiveHeight = RenderData->InteractiveHeight;
+	MeshVelocityRasterizeParameters->InteractiveDistance = RenderData->InteractiveDistance;
 	MeshVelocityRasterizeParameters->NumContactBodies = RenderData->ContactBodies.Num();
 	
 	const FIntVector GroupCount(

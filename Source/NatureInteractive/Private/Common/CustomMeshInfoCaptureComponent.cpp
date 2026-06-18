@@ -155,18 +155,3 @@ UTextureRenderTarget2D* UCustomMeshInfoCaptureComponent::GetInfoRenderTarget()
 	return CaptureRenderTarget;
 }
 
-FViewport* UCustomMeshInfoCaptureComponent::GetGameOrEditorViewport()
-{
-	// 获取游戏视口
-	if (GEngine && GEngine->GameViewport)
-	{
-		return GEngine->GameViewport->Viewport;
-	}
-	// 获取编辑器视口
-	else if (GEditor && GEditor->GetActiveViewport())
-	{
-		return GEditor->GetActiveViewport();
-	}
-	return nullptr;
-}
-

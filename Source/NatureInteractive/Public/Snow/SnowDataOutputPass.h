@@ -1,9 +1,8 @@
 #pragma once
 
-
 class FSnowInteractiveRenderData;
 
-class FSnowAddTrackPass
+class FSnowDataOutputPass
 {
 public:
 	void Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData);

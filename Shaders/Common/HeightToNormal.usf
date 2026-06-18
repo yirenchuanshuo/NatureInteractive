@@ -20,10 +20,15 @@ void HeightToNormalCS(uint3 ThreadId : SV_DispatchThreadID)
 	int2 PosUp = Pos+uint2(0, 1);
 	//PosUp = min(PosUp,MaxSize-1);
 	
-	float f1 = HeightInput[PosRight].x;
-	float f2 = HeightInput[PosLeft].x;
-	float f3 = HeightInput[PosUp].x;
-	float f4 = HeightInput[PosDown].x;
+	/*float f1 = (1 - HeightInput[PosRight].x)*0.5;
+	float f2 = (1 - HeightInput[PosLeft].x)*0.5;
+	float f3 = (1 - HeightInput[PosUp].x)*0.5;
+	float f4 = (1 - HeightInput[PosDown].x)*0.5;*/
+	
+	float f1 =  HeightInput[PosRight].x*0.5;
+	float f2 =  HeightInput[PosLeft].x*0.5;
+	float f3 =  HeightInput[PosUp].x*0.5;
+	float f4 =  HeightInput[PosDown].x*0.5;
 
 	float2 DeltaHeight = float2(f1-f2, f3-f4) * 0.01;
 	float3 Normal = normalize(cross(float3(TexSize,0.0,DeltaHeight.x), float3(0.0,TexSize,DeltaHeight.y)));

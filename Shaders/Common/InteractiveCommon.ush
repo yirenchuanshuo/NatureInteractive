@@ -1,0 +1,40 @@
+﻿
+float4 SpiralBlurTexture(Texture2D Tex,SamplerState TexSampler, float2 UV, float Distance,
+	int DistanceSteps, int RadialSteps, float RadialOffset,float KernelPower, float MipLevel)
+{
+	if (DistanceSteps <1 || RadialSteps < 1)
+	{
+		return Tex.SampleLevel(TexSampler, UV, MipLevel);
+	}
+	
+	const float TwoPi = 6.28318530718;
+	float StepSize = Distance / DistanceSteps;
+	float CurDist = 0.0f;
+	float SubOffset = 0.0f;
+	float AccumW = 0.0f;
+	float4 ColorSum = 0.0f;
+	
+	[loop]
+	for (int i = 0; i < DistanceSteps; ++i)
+	{
+		CurDist += StepSize;
+		
+		[loop]
+		for (int j = 0; j < RadialSteps; ++j)
+		{
+			SubOffset += 1.0f;
+			
+			float Angle = TwoPi * (SubOffset/RadialSteps);
+			float2 Offset = float2(cos(Angle), sin(Angle));
+			float2 NewUV = UV + Offset * CurDist;
+			
+			float w = pow(CurDist, KernelPower);
+			ColorSum += Tex.SampleLevel(TexSampler, NewUV, MipLevel) * w;
+			AccumW += w;
+		}
+		
+		SubOffset += RadialOffset;
+	}
+	
+	return ColorSum / max(AccumW, 1e-5f);
+}

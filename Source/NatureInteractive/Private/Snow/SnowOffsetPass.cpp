@@ -11,8 +11,8 @@ class FSnowInteractiveOffsetCS : public FGlobalShader
 	DECLARE_SHADER_TYPE(FSnowInteractiveOffsetCS, Global);
 	SHADER_USE_PARAMETER_STRUCT(FSnowInteractiveOffsetCS, FGlobalShader);
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SnowTrackInput)
-	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, SnowTrackOutput)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SnowOffsetInput)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, SnowOffsetOutput)
 	SHADER_PARAMETER(FIntPoint,Offset)
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -41,15 +41,15 @@ void FSnowOffsetPass::Draw(FRHICommandListImmediate& RHICommandList, const FSnow
 		FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
 	
 	
-	FRDGTextureRef SnowTrackInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowOutputData->GetRenderTargetTexture(), TEXT("SnowTrackInput"));
-	FRDGTextureRef SnowTrackOutputCache = GraphBuilder.CreateTexture(Desc, TEXT("SnowTrackOutputCache"));
-	FRDGTextureUAVRef SnowTrackOutputCacheUAV = GraphBuilder.CreateUAV(SnowTrackOutputCache);
+	FRDGTextureRef SnowOffsetInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowOutputData->GetRenderTargetTexture(), TEXT("SnowTrackInput"));
+	FRDGTextureRef SnowOffsetOutputCache = GraphBuilder.CreateTexture(Desc, TEXT("SnowTrackOutputCache"));
+	FRDGTextureUAVRef SnowOffsetOutputCacheUAV = GraphBuilder.CreateUAV(SnowOffsetOutputCache);
 	
 	
 	TShaderMapRef<FSnowInteractiveOffsetCS> SnowInteractiveOffsetComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
 	FSnowInteractiveOffsetCS::FParameters* SnowInteractiveOffsetParameters = GraphBuilder.AllocParameters<FSnowInteractiveOffsetCS::FParameters>();
-	SnowInteractiveOffsetParameters->SnowTrackInput = SnowTrackInput;
-	SnowInteractiveOffsetParameters->SnowTrackOutput = SnowTrackOutputCacheUAV;
+	SnowInteractiveOffsetParameters->SnowOffsetInput = SnowOffsetInput;
+	SnowInteractiveOffsetParameters->SnowOffsetOutput = SnowOffsetOutputCacheUAV;
 	SnowInteractiveOffsetParameters->Offset = FIntPoint(FMath::RoundToInt(RenderData->Offset.X), FMath::RoundToInt(RenderData->Offset.Y));
 	
 	auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
@@ -62,6 +62,45 @@ void FSnowOffsetPass::Draw(FRHICommandListImmediate& RHICommandList, const FSnow
 		FComputeShaderUtils::Dispatch(RHICmdList, SnowInteractiveOffsetComputeShader, *SnowInteractiveOffsetParameters,GroupCount);
 	});
 	
-	AddCopyTexturePass(GraphBuilder, SnowTrackOutputCache,SnowTrackInput , FRHICopyTextureInfo());
+	AddCopyTexturePass(GraphBuilder, SnowOffsetOutputCache,SnowOffsetInput , FRHICopyTextureInfo());
+	
+	
+	GraphBuilder.Execute();
+}
+
+void FSnowOffsetPass::DrawVelocity(FRHICommandListImmediate& RHICommandList,const FSnowInteractiveRenderData* RenderData)
+{
+	FRDGBuilder GraphBuilder(RHICommandList);
+
+	FRDGTextureDesc Desc(FRDGTextureDesc::Create2D(
+		FIntPoint(RenderData->SizeX, RenderData->SizeY),
+		RenderData->OutputUAVFormat,
+		FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
+	
+	
+	FRDGTextureRef SnowOffsetInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityOutputData->GetRenderTargetTexture(), TEXT("SnowTrackInput"));
+	FRDGTextureRef SnowOffsetOutputCache = GraphBuilder.CreateTexture(Desc, TEXT("SnowTrackOutputCache"));
+	FRDGTextureUAVRef SnowOffsetOutputCacheUAV = GraphBuilder.CreateUAV(SnowOffsetOutputCache);
+	
+	
+	TShaderMapRef<FSnowInteractiveOffsetCS> SnowInteractiveOffsetComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
+	FSnowInteractiveOffsetCS::FParameters* SnowInteractiveOffsetParameters = GraphBuilder.AllocParameters<FSnowInteractiveOffsetCS::FParameters>();
+	SnowInteractiveOffsetParameters->SnowOffsetInput = SnowOffsetInput;
+	SnowInteractiveOffsetParameters->SnowOffsetOutput = SnowOffsetOutputCacheUAV;
+	SnowInteractiveOffsetParameters->Offset = FIntPoint(FMath::RoundToInt(RenderData->Offset.X), FMath::RoundToInt(RenderData->Offset.Y));
+	
+	auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
+	GraphBuilder.AddPass(
+	RDG_EVENT_NAME("SnowInteractiveOffsetComputeShader"),
+	SnowInteractiveOffsetParameters,
+	ERDGPassFlags::Compute,
+	[SnowInteractiveOffsetComputeShader,&SnowInteractiveOffsetParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
+	{
+		FComputeShaderUtils::Dispatch(RHICmdList, SnowInteractiveOffsetComputeShader, *SnowInteractiveOffsetParameters,GroupCount);
+	});
+	
+	AddCopyTexturePass(GraphBuilder, SnowOffsetOutputCache,SnowOffsetInput , FRHICopyTextureInfo());
+	
+	
 	GraphBuilder.Execute();
 }

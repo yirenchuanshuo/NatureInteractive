@@ -11,11 +11,10 @@ struct FMeshVelocityRecord
 
 struct FMeshVelocityContactBody
 {
-	FMatrix44f WorldToLocal;
-	FVector3f HalfExtent;
-	float Pad0 = 0.f;
-	FVector3f LinearVelocity;
-	float Pad1 = 0.f;
+	FVector2f WorldMin;
+	FVector2f WorldMax;
+	FVector2f LinearVelocity;
+	FVector2f Pad = FVector2f::ZeroVector;
 };
 
 class FMeshVelocityRenderData
@@ -34,7 +33,8 @@ public:
 	FVector3f CaptureLocation = FVector3f::ZeroVector;
 	float CaptureRange = 1000.f;
 	float CaptureZ = 0.f;
-	float SoftEdge = 20.f;
+	float InteractiveHeight = 30.f;
+	float InteractiveDistance = 10.f;
 	
 	void InitRenderData(const UMeshVelocityCaptureComponent& CaptureComponent);
 	

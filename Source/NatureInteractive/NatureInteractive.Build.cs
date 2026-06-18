@@ -43,7 +43,6 @@ public class NatureInteractive : ModuleRules
 				"RHI", 
 				"InputCore",
 				"Projects",
-				"UnrealEd",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
