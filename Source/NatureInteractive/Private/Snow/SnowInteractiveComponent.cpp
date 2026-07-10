@@ -61,6 +61,15 @@ void USnowInteractiveComponent::BeginPlay()
 	PreviousQuantizedLocation = QuantizedLocation;
 }
 
+void USnowInteractiveComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	PrimaryComponentTick.SetTickFunctionEnable(false);
+	
+	FlushRenderingCommands();
+	
+	Super::EndPlay(EndPlayReason);
+}
+
 
 // Called every frame
 void USnowInteractiveComponent::TickComponent(float DeltaTime, ELevelTick TickType,

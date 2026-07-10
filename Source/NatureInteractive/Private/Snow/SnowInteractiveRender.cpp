@@ -26,17 +26,18 @@ void FSnowInteractiveRender::InitRenderProcess(const USnowInteractiveComponent& 
 
 void FSnowInteractiveRender::Render(const USnowInteractiveComponent& SnowInteractiveComponent) const
 {
+	FSnowInteractiveRenderData RenderDataSnapshot = SnowInteractiveComponent.SnowRenderData;
 	if(IsInRenderingThread())
 	{
 		FRHICommandListImmediate& RHICmdList = GetImmediateCommandList_ForRenderCommand();
-		Draw(RHICmdList,&SnowInteractiveComponent.SnowRenderData);
+		Draw(RHICmdList,&RenderDataSnapshot);
 	}
 	else
 	{
 		ENQUEUE_RENDER_COMMAND(SnowRenderCommand)(
-		[&SnowInteractiveComponent,this](FRHICommandListImmediate& RHICmdList)
+		[RenderDataSnapshot,this](FRHICommandListImmediate& RHICmdList)
 		{
-			Draw(RHICmdList,&SnowInteractiveComponent.SnowRenderData);
+			Draw(RHICmdList,&RenderDataSnapshot);
 		});
 	}
 }

@@ -51,6 +51,8 @@ public:
 	
 	void InitRenderData(const USnowInteractiveComponent& SnowInteractiveComponent);
 	void UpdateRenderData(const USnowInteractiveComponent& SnowInteractiveComponent,float InDeltaTime = 0.16667f);
+	void RefreshResource(const USnowInteractiveComponent& SnowInteractiveComponent);
+	void RefreshInitialParameter(const USnowInteractiveComponent& SnowInteractiveComponent);
 	
 	void SetFeatureLevel(ERHIFeatureLevel::Type InFeatureLevel)
 	{
