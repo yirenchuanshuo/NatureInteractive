@@ -1,4 +1,4 @@
-﻿
+
 #include "Snow/SnowDiffusionPass.h"
 
 #include "RenderGraphBuilder.h"
@@ -33,20 +33,18 @@ public:
 };
 IMPLEMENT_SHADER_TYPE(,FSnowInteractiveDiffusionCS, TEXT("/Plugin/NatureInteractive/SnowInteractive/SnowDiffusion.usf"), TEXT("SnowDiffusionCS"), SF_Compute);
 
-void FSnowDiffusionPass::Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData)
+void FSnowDiffusionPass::AddPass(FRDGBuilder& GraphBuilder, const FSnowInteractiveRenderData* RenderData)
 {
-	FRDGBuilder GraphBuilder(RHICommandList);
-	
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create2D(
 		FIntPoint(RenderData->SizeX, RenderData->SizeY),
 		RenderData->OutputUAVFormat,
 		FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
-	
-	
+
+
 	FRDGTextureRef SnowVelocityTexture = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityOutputData->GetRenderTargetTexture(), TEXT("SnowVelocityInput"));
 	FRDGTextureRef SnowDiffusionTexture = GraphBuilder.CreateTexture(Desc, TEXT("SnowDiffusionTexture"));
 	FRDGTextureUAVRef SnowDiffusionUAV = GraphBuilder.CreateUAV(SnowDiffusionTexture);
-	
+
 	TShaderMapRef<FSnowInteractiveDiffusionCS> SnowDiffusionComputeShader(GetGlobalShaderMap(GMaxRHIFeatureLevel));
 	FSnowInteractiveDiffusionCS::FParameters* SnowDiffusionParameters = GraphBuilder.AllocParameters<FSnowInteractiveDiffusionCS::FParameters>();
 	SnowDiffusionParameters->SnowVelocityInput = SnowVelocityTexture;
@@ -54,14 +52,19 @@ void FSnowDiffusionPass::Draw(FRHICommandListImmediate& RHICommandList, const FS
 	SnowDiffusionParameters->DeltaTime = RenderData->DeltaTime;
 	SnowDiffusionParameters->TexSize = RenderData->SizeX;
 	SnowDiffusionParameters->Diffusion = RenderData->Diffusion;
-	
+
 	auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
-	
+
 	for (int32 i = 0; i < RenderData->DiffusionIterations; ++i)
 	{
 		FComputeShaderUtils::AddPass(GraphBuilder,RDG_EVENT_NAME("SnowDiffusionCS"),SnowDiffusionComputeShader,SnowDiffusionParameters,GroupCount);
 		AddCopyTexturePass(GraphBuilder, SnowDiffusionTexture, SnowVelocityTexture,FRHICopyTextureInfo());
 	}
-	
+}
+
+void FSnowDiffusionPass::Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData)
+{
+	FRDGBuilder GraphBuilder(RHICommandList);
+	AddPass(GraphBuilder, RenderData);
 	GraphBuilder.Execute();
 }

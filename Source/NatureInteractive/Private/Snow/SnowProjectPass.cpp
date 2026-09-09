@@ -1,4 +1,4 @@
-﻿
+
 #include "Snow/SnowProjectPass.h"
 
 #include "RenderGraphBuilder.h"
@@ -87,7 +87,7 @@ void DrawProjectDPass(FRDGBuilder& GraphBuilder, FRDGTextureRef AdvectInput, FRD
 	Parameters->SnowAdvectInput = AdvectInput;
 	Parameters->SnowProjectOutput = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(ProjectOutput, 0));
 	Parameters->TexSize = RenderData->SizeX;
-	
+
 	TShaderMapRef<FSnowInteractiveProjectDCS> ComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
 	auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
 	FComputeShaderUtils::AddPass(GraphBuilder,RDG_EVENT_NAME("SnowProjectDPass"), ComputeShader,Parameters,GroupCount);
@@ -99,7 +99,7 @@ void DrawProjectPPass(FRDGBuilder& GraphBuilder, FRDGTextureRef AdvectInput, FRD
 	Parameters->SnowAdvectInput = AdvectInput;
 	Parameters->SnowProjectOutput = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(ProjectOutput, 0));
 	Parameters->TexSize = RenderData->SizeX;
-	
+
 	TShaderMapRef<FSnowInteractiveProjectPCS> ComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
 	auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
 	for (int i = 0; i < RenderData->ProjectSimIterations; i++)
@@ -115,34 +115,37 @@ void DrawProjectVPass(FRDGBuilder& GraphBuilder, FRDGTextureRef AdvectInput, FRD
 	Parameters->SnowAdvectInput = AdvectInput;
 	Parameters->SnowProjectOutput = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(ProjectOutput, 0));
 	Parameters->TexSize = RenderData->SizeX;
-	
+
 	TShaderMapRef<FSnowInteractiveProjectVCS> ComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
 	auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
 	FComputeShaderUtils::AddPass(GraphBuilder,RDG_EVENT_NAME("SnowProjectVPass"), ComputeShader,Parameters,GroupCount);
 }
 
 
-void FSnowProjectPass::Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData)
+void FSnowProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FSnowInteractiveRenderData* RenderData)
 {
-	FRDGBuilder GraphBuilder(RHICommandList);
-	
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create2D(
 		FIntPoint(RenderData->SizeX, RenderData->SizeY),
 		RenderData->OutputUAVFormat,
 		FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
-	
+
 	FRDGTextureRef AdvectInput =  RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityOutputData->GetRenderTargetTexture(), TEXT("SnowAdvectInput"));
 	FRDGTextureRef ProjectOutput = GraphBuilder.CreateTexture(Desc, TEXT("SnowProjectTexture"));
 	//FRDGTextureRef VelocityTextureTemp = GraphBuilder.CreateTexture(Desc, TEXT("SnowVelocityTempTexture"));
-	
+
 	//FRDGTextureRef VelocityTexture = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityDiffusionOutputData->GetRenderTargetTexture(), TEXT("SnowProjectOutputDebug"));
 	//AddCopyTexturePass(GraphBuilder, AdvectInput, VelocityTextureTemp);
-	
+
 	DrawProjectDPass(GraphBuilder, AdvectInput, ProjectOutput,RenderData);
 	DrawProjectPPass(GraphBuilder, ProjectOutput, AdvectInput,RenderData);
 	DrawProjectVPass(GraphBuilder, AdvectInput, ProjectOutput,RenderData);
-	
+
 	AddCopyTexturePass(GraphBuilder, ProjectOutput, AdvectInput);
-	
+}
+
+void FSnowProjectPass::Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData)
+{
+	FRDGBuilder GraphBuilder(RHICommandList);
+	AddPass(GraphBuilder, RenderData);
 	GraphBuilder.Execute();
 }

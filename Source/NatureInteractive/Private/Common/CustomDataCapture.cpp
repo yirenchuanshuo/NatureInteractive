@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Common/CustomDataCapture.h"
@@ -13,12 +13,15 @@ ACustomDataCapture::ACustomDataCapture()
 {
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
-	
+
 	SceneComponent = CreateDefaultSubobject<USceneComponent>(TEXT("SceneComponent"));
 	SetRootComponent(SceneComponent);
 	CameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("CameraComponent"));
 	CameraComponent->SetupAttachment(SceneComponent);
-	
+
+	CameraComponent->SetRelativeRotation(FRotator(90.f, 0.f, 90.f));
+	CameraComponent->ProjectionMode = ECameraProjectionMode::Orthographic;
+
 	MeshDepthCaptureComponent = CreateDefaultSubobject<UCustomMeshInfoCaptureComponent>(TEXT("MeshDepthCaptureComponent"));
 	VelocityCaptureComponent = CreateDefaultSubobject<UMeshVelocityCaptureComponent>(TEXT("MeshVelocityCaptureComponent"));
 }
@@ -28,6 +31,7 @@ void ACustomDataCapture::BeginPlay()
 {
 	Super::BeginPlay();
 	MeshDepthCaptureComponent->SetRenderTargetTexture(CaptureRenderTarget);
+	MeshDepthCaptureComponent->UpdateCaptureData();
 	if (bCaptureVelocity)
 	{
 		VelocityCaptureComponent->SetRenderTarget(VelocityRenderTarget);
@@ -38,7 +42,6 @@ void ACustomDataCapture::BeginPlay()
 void ACustomDataCapture::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	MeshDepthCaptureComponent->CaptureCustomMeshDepth(CameraComponent,Meshes);
 	if (bCaptureVelocity)
 	{
 		VelocityCaptureComponent->CaptureMeshVelocity(CameraComponent,Meshes,MeshVelocityRecords,DeltaTime);
@@ -56,7 +59,7 @@ void ACustomDataCapture::RemoveMesh(const UCustomMeshInfoComponent* MeshInfoComp
 	{
 		return MeshInfoComponent->OwnerHadMeshes.Contains(Mesh);
 	});
-	
+
 	MeshVelocityRecords.RemoveAll([&MeshInfoComponent](const FMeshVelocityRecord& Record)
 	{
 		if (!Record.Mesh.IsValid())
@@ -67,6 +70,10 @@ void ACustomDataCapture::RemoveMesh(const UCustomMeshInfoComponent* MeshInfoComp
 	});
 }
 
+void ACustomDataCapture::CaptureDepth(TFunction<void(FRDGBuilder&)>&& PostRenderGraphCallback)
+{
+	MeshDepthCaptureComponent->CaptureCustomMeshDepth(CameraComponent,Meshes,MoveTemp(PostRenderGraphCallback));
+}
 
 
 FMeshVelocityRecord& ACustomDataCapture::FindOrAddMeshVelocityRecord(TArray<FMeshVelocityRecord>& InOutRecords,
@@ -79,7 +86,7 @@ FMeshVelocityRecord& ACustomDataCapture::FindOrAddMeshVelocityRecord(TArray<FMes
 			return Record;
 		}
 	}
-	
+
 	FMeshVelocityRecord NewRecord;
 	NewRecord.Mesh = Mesh;
 	NewRecord.PrevLocation = Mesh ? Mesh->GetComponentLocation() : FVector::ZeroVector;

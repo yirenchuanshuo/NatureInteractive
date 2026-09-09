@@ -1,10 +1,12 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "InteractiveInfoRenderingPass.h"
 #include "Components/ActorComponent.h"
+#include "Templates/Function.h"
+
 #include "CustomMeshInfoCaptureComponent.generated.h"
 
 
@@ -25,14 +27,15 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-	void CaptureCustomMeshDepth(const UCameraComponent* Camera,TArray<UMeshComponent*>& Meshes);
+	void CaptureCustomMeshDepth(const UCameraComponent* Camera,TArray<UMeshComponent*>& Meshes,TFunction<void(FRDGBuilder&)>&& PostRenderGraphCallback = nullptr);
 	void SetRenderTargetTexture(UTextureRenderTarget2D* RenderTarget);
-	
+	void UpdateCaptureData();
+
 	UTextureRenderTarget2D* GetInfoRenderTarget();
 
 	UPROPERTY(EditDefaultsOnly, Category = "Render")
 	TObjectPtr<UTextureRenderTarget2D> CaptureRenderTarget;
-	
+
 	FInteractiveRenderingDepthPass* CustomDepthPass = nullptr;
 	FIntPoint CaptureSize;
 };

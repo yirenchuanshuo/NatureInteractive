@@ -1,4 +1,4 @@
-﻿#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/Common.ush"
 Texture2D<float> SnowForceInput;
 Texture2D SnowTrackInput;
 RWTexture2D<float4> SnowOutput;
@@ -12,24 +12,25 @@ float DeltaTime;
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void SnowAddTrackCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	
+
 	float Depth = SnowForceInput[ThreadId.xy].x;
-	float FootZ = CaptureZ + Depth;           
-	
-	float Penetration = InteractiveHeight-FootZ;
-	
+	float FootZ = CaptureZ + Depth;
+
+	float Penetration = InteractiveHeight - FootZ;
+
 	float Force = saturate(Penetration / InteractiveDistance);
+
 
 	float SnowTrackTemp = SnowTrackInput[ThreadId.xy].x;
 	SnowTrackTemp = max(SnowTrackTemp.r , Force);
 	float SnowFallingNew = SnowTrackTemp - SnowTrackInput[ThreadId.xy].x;
 	float SnowFallingOld = SnowTrackInput[ThreadId.xy].y - DeltaTime * FallingSpeed;
 	float SnowFallRange = max(SnowFallingNew, SnowFallingOld);
-	
+
 	float SnowTrack = SnowTrackInput[ThreadId.xy].x - DeltaTime * FadeSpeed;
 	SnowTrack = max(SnowTrack.r , Force);
-	
-	
+
+
 	SnowOutput[ThreadId.xy] = float4(SnowTrack,SnowFallRange,0,1);
 }
 
@@ -46,11 +47,11 @@ void SnowAddVelocityTrackCS(uint3 ThreadId : SV_DispatchThreadID)
 	float2 NewV = In.xy;
 	float2 OldV = SnowVelocityTrackInput[Pos].xy;
 	float Force = In.z;
-	
+
 	float Damp = saturate(1.0-DeltaTime * VelocityFadeSpeed);
 	OldV *= Damp;
-	
+
 	float2 V = lerp(OldV, NewV, saturate(Force));
-	
+
 	SnowVelocityTrackOutput[Pos] = float4(V,0,1);
 }

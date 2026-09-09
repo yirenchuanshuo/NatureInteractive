@@ -1,4 +1,4 @@
-﻿#include "Common/InteractiveInfoRenderingPass.h"
+#include "Common/InteractiveInfoRenderingPass.h"
 
 #include "RenderGraphUtils.h"
 
@@ -27,9 +27,19 @@ void FInteractiveRenderingDepthPass::OnPostRender(FRDGBuilder& GraphBuilder)
 		GraphBuilder, InteractiveInfoRenderTarget->GetRenderTargetTexture(),
 		TEXT("InteractiveInfoExternalTarget"));
 	AddCopyTexturePass(GraphBuilder, RenderTargetTexture, ExternalTarget);
+
+	if (PostRenderGraphCallback)
+	{
+		PostRenderGraphCallback(GraphBuilder);
+	}
 }
 
 void FInteractiveRenderingDepthPass::SetRenderTargetTexture(FRenderTarget* InRenderTargetTexture)
 {
 	InteractiveInfoRenderTarget = InRenderTargetTexture;
+}
+
+void FInteractiveRenderingDepthPass::SetPostRenderGraphCallback(TFunction<void(FRDGBuilder&)>&& InPostRenderGraphCallback)
+{
+	PostRenderGraphCallback = MoveTemp(InPostRenderGraphCallback);
 }

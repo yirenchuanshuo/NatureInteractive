@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Snow/SnowInteractiveComponent.h"
@@ -33,6 +33,8 @@ void USnowInteractiveComponent::PostLoad()
 }
 
 
+
+
 // Called when the game starts
 void USnowInteractiveComponent::BeginPlay()
 {
@@ -42,20 +44,27 @@ void USnowInteractiveComponent::BeginPlay()
 		SnowInteractiveActor = *It;
 		break;
 	}
-	
+	if (!SnowInteractiveActor)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		SnowInteractiveActor = GetWorld()->SpawnActor<ACustomDataCapture>(
+			ACustomDataCapture::StaticClass(), Params);
+	}
+
 	SnowInteractiveRender->InitRenderProcess(*this);
-	
+
 	SnowInput = SnowInteractiveActor->CaptureRenderTarget;
 	if (bUseSnowDiffusion)
 	{
 		SnowVelocityInput = SnowInteractiveActor->VelocityRenderTarget;
 	}
-	
+
 	SnowInteractiveActor->CameraComponent->OrthoWidth = static_cast<float>(SnowInteractiveRange);
 	InitOutputTextureAttributes();
 	InitSnowDataParameterCollection();
 	SnowRenderData.InitRenderData(*this);
-	
+
 	const FVector2D QuantizedLocation = QuantizeLocation(GetComponentLocation());
 	CurrentQuantizedLocation = QuantizedLocation;
 	PreviousQuantizedLocation = QuantizedLocation;
@@ -64,9 +73,9 @@ void USnowInteractiveComponent::BeginPlay()
 void USnowInteractiveComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	PrimaryComponentTick.SetTickFunctionEnable(false);
-	
+
 	FlushRenderingCommands();
-	
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -78,7 +87,16 @@ void USnowInteractiveComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	UpdateOffsetData(DeltaTime);
 	UpdateSnowDataParameterCollection();
-	SnowInteractiveRender->Render(*this);
+
+	const FSnowInteractiveRenderData RenderDataSnapshot = SnowRenderData;
+	const FSnowInteractiveRender* SnowRenderer = SnowInteractiveRender.Get();
+	SnowInteractiveActor->CaptureDepth([RenderDataSnapshot, SnowRenderer](FRDGBuilder& GraphBuilder)
+	{
+		if (SnowRenderer)
+		{
+			SnowRenderer->AddPasses(GraphBuilder, &RenderDataSnapshot);
+		}
+	});
 }
 
 void USnowInteractiveComponent::InitOutputTextureAttributes() const
@@ -86,21 +104,21 @@ void USnowInteractiveComponent::InitOutputTextureAttributes() const
 	SnowOutput->bSupportsUAV = true;
 	SnowOutput->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
 	SnowOutput->UpdateResourceImmediate(true);
-	
+
 	SnowOutputHeight->bSupportsUAV = true;
 	SnowOutputHeight->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
 	SnowOutputHeight->UpdateResourceImmediate(true);
-	
+
 	SnowOutputNormal->bSupportsUAV = true;
 	SnowOutputNormal->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
 	SnowOutputNormal->UpdateResourceImmediate(true);
-	
+
 	if (bUseSnowDiffusion)
 	{
 		SnowVelocityOutput->bSupportsUAV = true;
 		SnowVelocityOutput->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
 		SnowVelocityOutput->UpdateResourceImmediate(true);
-		
+
 		SnowVelocityHeightOutput->bSupportsUAV = true;
 		SnowVelocityHeightOutput->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
 		SnowVelocityHeightOutput->UpdateResourceImmediate(true);
@@ -121,12 +139,12 @@ void USnowInteractiveComponent::UpdateOffsetData(float DeltaTime)
 {
 	PreviousQuantizedLocation = CurrentQuantizedLocation;
 	CurrentQuantizedLocation = QuantizeLocation(GetComponentLocation());
-	
+
 	FVector ActorLocation = GetComponentLocation();
 	ActorLocation.X = CurrentQuantizedLocation.X;
 	ActorLocation.Y = CurrentQuantizedLocation.Y;
 	ActorLocation.Z += CaptureOffsetZ;
-	
+
 	SnowInteractiveActor->SetActorLocation(ActorLocation);
 	SnowRenderData.UpdateRenderData(*this,DeltaTime);
 }
@@ -134,7 +152,7 @@ void USnowInteractiveComponent::UpdateOffsetData(float DeltaTime)
 FVector2D USnowInteractiveComponent::QuantizeLocation(const FVector& InLocation) const
 {
 	const float Unlit = GetUnlitSize();
-	
+
 	const double QuantizedX = (FMath::RoundToDouble(InLocation.X/Unlit)+0.5) * Unlit;
 	const double QuantizedY = (FMath::RoundToDouble(InLocation.Y/Unlit)+0.5) * Unlit;
 	return FVector2D(QuantizedX, QuantizedY);

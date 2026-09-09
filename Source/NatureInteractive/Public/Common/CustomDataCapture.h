@@ -1,16 +1,19 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "FMeshVelocityRenderData.h"
 #include "GameFramework/Actor.h"
+#include "Templates/Function.h"
 #include "CustomDataCapture.generated.h"
 
+class FRDGBuilder;
 class UMeshVelocityCaptureComponent;
 class UCustomMeshInfoComponent;
 class UCameraComponent;
 class UCustomMeshInfoCaptureComponent;
+
 
 UCLASS()
 class NATUREINTERACTIVE_API ACustomDataCapture : public AActor
@@ -28,36 +31,39 @@ protected:
 public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
-	
+
 	void AddMesh(const UCustomMeshInfoComponent* MeshInfoComponent);
-	
+
 	void RemoveMesh(const UCustomMeshInfoComponent* MeshInfoComponent);
-	
+
+	void CaptureDepth(TFunction<void(FRDGBuilder&)>&& PostRenderGraphCallback = nullptr);
+
 	FMeshVelocityRecord& FindOrAddMeshVelocityRecord(TArray<FMeshVelocityRecord>& InOutRecords,UMeshComponent* Mesh);
-	
+
+
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<USceneComponent>	SceneComponent;
-	
+
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UCameraComponent> CameraComponent;
-	
+
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UCustomMeshInfoCaptureComponent> MeshDepthCaptureComponent;
-	
+
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UMeshVelocityCaptureComponent> VelocityCaptureComponent;
-	
+
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UTextureRenderTarget2D> CaptureRenderTarget;
-	
+
 	UPROPERTY(EditDefaultsOnly)
 	TObjectPtr<UTextureRenderTarget2D> VelocityRenderTarget;
-	
+
 	UPROPERTY(EditDefaultsOnly)
 	bool bCaptureVelocity = false;
-	
+
 	UPROPERTY(Transient)
 	TArray<UMeshComponent*> Meshes;
-	
+
 	TArray<FMeshVelocityRecord> MeshVelocityRecords;
 };

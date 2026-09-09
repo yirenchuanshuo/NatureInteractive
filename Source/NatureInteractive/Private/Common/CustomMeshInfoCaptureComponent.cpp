@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Common/CustomMeshInfoCaptureComponent.h"
@@ -50,18 +50,15 @@ UCustomMeshInfoCaptureComponent::UCustomMeshInfoCaptureComponent()
 void UCustomMeshInfoCaptureComponent::BeginPlay()
 {
 	Super::BeginPlay();
-
-	CaptureSize = FIntPoint(CaptureRenderTarget->SizeX, CaptureRenderTarget->SizeY);
-	
 }
 
 
 // Called every frame
 
 
-void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth(const UCameraComponent* Camera,TArray<UMeshComponent*>& Meshes)
+void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth(const UCameraComponent* Camera,TArray<UMeshComponent*>& Meshes,TFunction<void(FRDGBuilder&)>&& PostRenderGraphCallback)
 {
-	
+
 	TWeakObjectPtr<UWorld> WorldPtr = GetWorld();
 	FSceneInterface* SceneInterface = WorldPtr->Scene;
 	if ( Camera && SceneInterface )
@@ -76,12 +73,12 @@ void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth(const UCameraCompon
 			FPlane(1,0,0,0),
 			FPlane(0,1,0,0),
 			FPlane(0,0,0,1));
-		
-		
+
+
 
 		FMatrix ProjectionMatrix = FMatrix::Identity;
 		const float ClippingPlane = GNearClippingPlane;
-		
+
 		if (Camera->ProjectionMode == ECameraProjectionMode::Orthographic)
 		{
 			const float OrthoWidth = Camera->OrthoWidth;
@@ -90,9 +87,9 @@ void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth(const UCameraCompon
 			const float OrthoHalfHeight = OrthoHalfWidth / AspectRatio;
 
 			constexpr float NearPlane = 0; // 默认为 0
-			const float FarPlane = FMath::Min(Camera->OrthoFarClipPlane, 
+			const float FarPlane = FMath::Min(Camera->OrthoFarClipPlane,
 										UE_FLOAT_HUGE_DISTANCE / 4.0f);
-			
+
 			// 与 UE5 引擎一致的公式
 			const float ZScale  = 1.0f / (FarPlane - NearPlane);
 			constexpr float ZOffset = -NearPlane;
@@ -120,7 +117,7 @@ void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth(const UCameraCompon
 			const float FOV = Camera->FieldOfView * (PI / 360.f);
 			BuildProjectionMatrix(CaptureSize,FOV,ClippingPlane,ProjectionMatrix);
 		}
-		
+
 		FSceneInterface::FCustomRenderPassRendererInput PassInput;
 		PassInput.ViewLocation = ViewLocation;
 		PassInput.ViewRotationMatrix = ViewRotationMatrix;
@@ -133,21 +130,27 @@ void UCustomMeshInfoCaptureComponent::CaptureCustomMeshDepth(const UCameraCompon
 		{
 			ComponentsToRenderInDepthPass.Add(Mesh->GetPrimitiveSceneId());
 		}
-		
+
 		CustomDepthPass = new FInteractiveRenderingDepthPass(CaptureSize);
 		CustomDepthPass->SetRenderTargetTexture(CaptureRenderTarget->GameThread_GetRenderTargetResource());
-		
+		CustomDepthPass->SetPostRenderGraphCallback(MoveTemp(PostRenderGraphCallback));
+
 		PassInput.ShowOnlyPrimitives = MoveTemp(ComponentsToRenderInDepthPass);
 		PassInput.CustomRenderPass = CustomDepthPass;
-	
+
 		Scene->CustomRenderPassRendererInputs.Add(PassInput);
-		
+
 	}
 }
 
 void UCustomMeshInfoCaptureComponent::SetRenderTargetTexture(UTextureRenderTarget2D* RenderTarget)
 {
 	CaptureRenderTarget = RenderTarget;
+}
+
+void UCustomMeshInfoCaptureComponent::UpdateCaptureData()
+{
+	CaptureSize = FIntPoint(CaptureRenderTarget->SizeX, CaptureRenderTarget->SizeY);
 }
 
 UTextureRenderTarget2D* UCustomMeshInfoCaptureComponent::GetInfoRenderTarget()

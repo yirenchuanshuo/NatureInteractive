@@ -63,22 +63,20 @@ public:
 };
 IMPLEMENT_SHADER_TYPE(,FSnowInteractiveAddVelocityTrackCS, TEXT("/Plugin/NatureInteractive/SnowInteractive/SnowAddTrack.usf"), TEXT("SnowAddVelocityTrackCS"), SF_Compute);
 
-void FSnowAddTrackPass::Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData)
+void FSnowAddTrackPass::AddPass(FRDGBuilder& GraphBuilder, const FSnowInteractiveRenderData* RenderData)
 {
-	FRDGBuilder GraphBuilder(RHICommandList);
-
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create2D(
 		FIntPoint(RenderData->SizeX, RenderData->SizeY),
 		RenderData->OutputUAVFormat,
 		FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
-	
-	
+
+
 	FRDGTextureRef SnowTrackInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowOutputData->GetRenderTargetTexture(), TEXT("SnowTrackInput"));
 	FRDGTextureRef SnowForceInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowInputData->GetRenderTargetTexture(), TEXT("SnowForceInput"));
-	
+
 	FRDGTextureRef SnowTrackOutput = GraphBuilder.CreateTexture(Desc, TEXT("SnowTrackOutput"));
 	FRDGTextureUAVRef SnowOutputUAV = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(SnowTrackOutput,0));
-	
+
 	TShaderMapRef<FSnowInteractiveAddTrackCS> SnowInteractiveAddTrackComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
 	FSnowInteractiveAddTrackCS::FParameters* SnowInteractiveAddTrackParameters = GraphBuilder.AllocParameters<FSnowInteractiveAddTrackCS::FParameters>();
 	SnowInteractiveAddTrackParameters->SnowForceInput = SnowForceInput;
@@ -90,7 +88,7 @@ void FSnowAddTrackPass::Draw(FRHICommandListImmediate& RHICommandList, const FSn
 	SnowInteractiveAddTrackParameters->FadeSpeed = RenderData->FadeSpeed;
 	SnowInteractiveAddTrackParameters->FallingSpeed = RenderData->FallingSpeed;
 	SnowInteractiveAddTrackParameters->DeltaTime = RenderData->DeltaTime;
-	
+
 	auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
 	GraphBuilder.AddPass(
 	RDG_EVENT_NAME("SnowInteractiveAddTrackComputeShader"),
@@ -100,29 +98,32 @@ void FSnowAddTrackPass::Draw(FRHICommandListImmediate& RHICommandList, const FSn
 	{
 		FComputeShaderUtils::Dispatch(RHICmdList, SnowInteractiveAddTrackComputeShader, *SnowInteractiveAddTrackParameters,GroupCount);
 	});
-	
+
 	AddCopyTexturePass(GraphBuilder, SnowTrackOutput, SnowTrackInput, FRHICopyTextureInfo());
-	
+}
+
+void FSnowAddTrackPass::Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData)
+{
+	FRDGBuilder GraphBuilder(RHICommandList);
+	AddPass(GraphBuilder, RenderData);
 	GraphBuilder.Execute();
 }
 
-void FSnowAddTrackPass::DrawVelocity(FRHICommandListImmediate& RHICommandList,
+void FSnowAddTrackPass::AddVelocityPass(FRDGBuilder& GraphBuilder,
 	const FSnowInteractiveRenderData* RenderData)
 {
-	FRDGBuilder GraphBuilder(RHICommandList);
-
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create2D(
 		FIntPoint(RenderData->SizeX, RenderData->SizeY),
 		RenderData->OutputUAVFormat,
 		FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
-	
-	
+
+
 	FRDGTextureRef SnowVelocityInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityInputData->GetRenderTargetTexture(), TEXT("SnowVelocityInput"));
 	FRDGTextureRef SnowVelocityTrackInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityOutputData->GetRenderTargetTexture(), TEXT("SnowVelocityTrackInput"));
-	
+
 	FRDGTextureRef SnowVelocityTrackOutput = GraphBuilder.CreateTexture(Desc, TEXT("SnowVelocityTrackOutput"));
 	FRDGTextureUAVRef SnowVelocityTrackOutputUAV = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(SnowVelocityTrackOutput,0));
-	
+
 	TShaderMapRef<FSnowInteractiveAddVelocityTrackCS> SnowInteractiveAddTrackComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
 	FSnowInteractiveAddVelocityTrackCS::FParameters* SnowInteractiveAddTrackParameters = GraphBuilder.AllocParameters<FSnowInteractiveAddVelocityTrackCS::FParameters>();
 	SnowInteractiveAddTrackParameters->SnowVelocityInput = SnowVelocityInput;
@@ -130,7 +131,7 @@ void FSnowAddTrackPass::DrawVelocity(FRHICommandListImmediate& RHICommandList,
 	SnowInteractiveAddTrackParameters->SnowVelocityTrackOutput = SnowVelocityTrackOutputUAV;
 	SnowInteractiveAddTrackParameters->VelocityFadeSpeed = RenderData->VelocityFadeSpeed;
 	SnowInteractiveAddTrackParameters->DeltaTime = RenderData->DeltaTime;
-	
+
 	auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
 	GraphBuilder.AddPass(
 	RDG_EVENT_NAME("SnowInteractiveAddVelocityTrackComputeShader"),
@@ -140,8 +141,14 @@ void FSnowAddTrackPass::DrawVelocity(FRHICommandListImmediate& RHICommandList,
 	{
 		FComputeShaderUtils::Dispatch(RHICmdList, SnowInteractiveAddTrackComputeShader, *SnowInteractiveAddTrackParameters,GroupCount);
 	});
-	
+
 	AddCopyTexturePass(GraphBuilder, SnowVelocityTrackOutput, SnowVelocityTrackInput, FRHICopyTextureInfo());
-	
+}
+
+void FSnowAddTrackPass::DrawVelocity(FRHICommandListImmediate& RHICommandList,
+	const FSnowInteractiveRenderData* RenderData)
+{
+	FRDGBuilder GraphBuilder(RHICommandList);
+	AddVelocityPass(GraphBuilder, RenderData);
 	GraphBuilder.Execute();
 }

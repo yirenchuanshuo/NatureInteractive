@@ -1,8 +1,9 @@
-﻿#pragma once
+#pragma once
 #include "Templates/PimplPtr.h"
 #include "SnowAddTrackPass.h"
 #include "SnowOffsetPass.h"
 
+class FRDGBuilder;
 class FSnowProjectPass;
 class FSnowAdvectPass;
 class FSnowDiffusionPass;
@@ -15,18 +16,19 @@ class FSnowInteractiveRender
 {
 public:
 	FSnowInteractiveRender();
-	
+
 	void InitRenderProcess(const USnowInteractiveComponent& SnowInteractiveComponent);
 	void Render(const USnowInteractiveComponent& SnowInteractiveComponent) const;
+	void AddPasses(FRDGBuilder& GraphBuilder, const FSnowInteractiveRenderData* RenderData) const;
 	void Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData) const;
-	
+
 	bool bRenderDiffusionData = false;
-	
+
 	TPimplPtr<FSnowAddTrackPass> AddTrackPass;
 	TPimplPtr<FSnowOffsetPass> OffsetPass;
 	TPimplPtr<FSnowTrackBlurPass> TrackBlurPass;
 	TPimplPtr<FSnowDataOutputPass> SnowDataOutputPass;
-	
+
 	TPimplPtr<FSnowDiffusionPass> DiffusionPass;
 	TPimplPtr<FSnowAdvectPass> AdvectPass;
 	TPimplPtr<FSnowProjectPass> ProjectPass;

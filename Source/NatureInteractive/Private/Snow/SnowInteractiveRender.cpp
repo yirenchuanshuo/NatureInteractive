@@ -7,6 +7,7 @@
 #include "Snow/SnowInteractiveComponent.h"
 #include "Snow/SnowProjectPass.h"
 #include "Snow/SnowTrackBlurPass.h"
+#include "RenderGraphBuilder.h"
 
 FSnowInteractiveRender::FSnowInteractiveRender()
 {
@@ -42,20 +43,27 @@ void FSnowInteractiveRender::Render(const USnowInteractiveComponent& SnowInterac
 	}
 }
 
-void FSnowInteractiveRender::Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData) const
+void FSnowInteractiveRender::AddPasses(FRDGBuilder& GraphBuilder, const FSnowInteractiveRenderData* RenderData) const
 {
-	OffsetPass->Draw(RHICommandList,RenderData);
-	AddTrackPass->Draw(RHICommandList,RenderData);
-	TrackBlurPass->Draw(RHICommandList,RenderData);
-	SnowDataOutputPass->Draw(RHICommandList,RenderData);
-	
+	OffsetPass->AddPass(GraphBuilder,RenderData);
+	AddTrackPass->AddPass(GraphBuilder,RenderData);
+	TrackBlurPass->AddPass(GraphBuilder,RenderData);
+	SnowDataOutputPass->AddPass(GraphBuilder,RenderData);
+
 	if (bRenderDiffusionData)
 	{
-		AddTrackPass->DrawVelocity(RHICommandList,RenderData);
-		DiffusionPass->Draw(RHICommandList,RenderData);
-		AdvectPass->Draw(RHICommandList,RenderData);
-		ProjectPass->Draw(RHICommandList,RenderData);
-		OffsetPass->DrawVelocity(RHICommandList,RenderData);
-		SnowDataOutputPass->DrawVelocity(RHICommandList,RenderData);
+		AddTrackPass->AddVelocityPass(GraphBuilder,RenderData);
+		DiffusionPass->AddPass(GraphBuilder,RenderData);
+		AdvectPass->AddPass(GraphBuilder,RenderData);
+		ProjectPass->AddPass(GraphBuilder,RenderData);
+		OffsetPass->AddVelocityPass(GraphBuilder,RenderData);
+		SnowDataOutputPass->AddVelocityPass(GraphBuilder,RenderData);
 	}
+}
+
+void FSnowInteractiveRender::Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData) const
+{
+	FRDGBuilder GraphBuilder(RHICommandList);
+	AddPasses(GraphBuilder,RenderData);
+	GraphBuilder.Execute();
 }

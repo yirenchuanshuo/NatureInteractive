@@ -69,21 +69,19 @@ public:
 };
 IMPLEMENT_SHADER_TYPE(,FSnowVelocityHeightOutputCS, TEXT("/Plugin/NatureInteractive/SnowInteractive/SnowTrackHeightOutput.usf"), TEXT("SnowVelocityHeightOutputCS"), SF_Compute);
 
-void FSnowDataOutputPass::Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData)
+void FSnowDataOutputPass::AddPass(FRDGBuilder& GraphBuilder, const FSnowInteractiveRenderData* RenderData)
 {
-    FRDGBuilder GraphBuilder(RHICommandList);
-    
     FRDGTextureRef SnowPileupNoise = RegisterExternalTexture(GraphBuilder, RenderData->SnowPileupNoise->GetTextureRHI(), TEXT("SnowPileupNoise"));
-    
+
     FRDGTextureDesc Desc(FRDGTextureDesc::Create2D(
         FIntPoint(RenderData->SizeX, RenderData->SizeY),
         RenderData->OutputUAVFormat,
         FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
-    
+
     FRDGTextureRef SnowTrackInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowOutputHeightData->GetRenderTargetTexture(), TEXT("SnowTrackHeightDataInput"));
     FRDGTextureRef SnowTrackHeightOutput = GraphBuilder.CreateTexture(Desc, TEXT("SnowTrackHeightDataOutput"));
     FRDGTextureUAVRef SnowTrackHeightOutputUAV = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(SnowTrackHeightOutput,0));
-    
+
     TShaderMapRef<FSnowTrackHeightOutputCS> SnowTrackHeightOutputComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
     FSnowTrackHeightOutputCS::FParameters* SnowTrackHeightOutputParameters = GraphBuilder.AllocParameters<FSnowTrackHeightOutputCS::FParameters>();
     SnowTrackHeightOutputParameters->SnowTrackInput = SnowTrackInput;
@@ -100,26 +98,30 @@ void FSnowDataOutputPass::Draw(FRHICommandListImmediate& RHICommandList, const F
     SnowTrackHeightOutputParameters->SnowPileupNoisePow = RenderData->SnowPileupNoisePow;
     SnowTrackHeightOutputParameters->SnowPileupHeightScale = RenderData->SnowPileupHeightScale;
     SnowTrackHeightOutputParameters->SnowFalloffHeightScale = RenderData->SnowFalloffHeightScale;
-    
+
     auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
     FComputeShaderUtils::AddPass(GraphBuilder, RDG_EVENT_NAME("SnowTrackHeightOutput"), SnowTrackHeightOutputComputeShader, SnowTrackHeightOutputParameters, GroupCount);
-    
+
     AddCopyTexturePass(GraphBuilder, SnowTrackHeightOutput, SnowTrackInput, FRHICopyTextureInfo());
-    
+
     FRDGTextureRef SnowNormalOutput = RegisterExternalTexture(GraphBuilder, RenderData->SnowOutputNormalData->GetRenderTargetTexture(), TEXT("SnowNormal_ExternalOutput"));
     CommonShaderCS::AddHeightToNormalPass(GraphBuilder,SnowTrackInput,SnowNormalOutput,RenderData->FeatureLevel,TEXT("SnowHeightToNormal"));
+}
 
+void FSnowDataOutputPass::Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData)
+{
+    FRDGBuilder GraphBuilder(RHICommandList);
+    AddPass(GraphBuilder, RenderData);
     GraphBuilder.Execute();
 }
 
-void FSnowDataOutputPass::DrawVelocity(FRHICommandListImmediate& RHICommandList,
+void FSnowDataOutputPass::AddVelocityPass(FRDGBuilder& GraphBuilder,
     const FSnowInteractiveRenderData* RenderData)
 {
-    FRDGBuilder GraphBuilder(RHICommandList);
     FRDGTextureRef SnowVelocityInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityOutputData->GetRenderTargetTexture(), TEXT("SnowVelocityDataInput"));
     FRDGTextureRef SnowVelocityHeightOutput = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityHeightOutputData->GetRenderTargetTexture(), TEXT("SnowVelocityHeightDataOutput"));
     FRDGTextureUAVRef SnowVelocityHeightOutputUAV = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(SnowVelocityHeightOutput,0));
-    
+
     TShaderMapRef<FSnowVelocityHeightOutputCS> SnowVelocityHeightOutputComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
     FSnowVelocityHeightOutputCS::FParameters* SnowVelocityHeightOutputParameters = GraphBuilder.AllocParameters<FSnowVelocityHeightOutputCS::FParameters>();
     SnowVelocityHeightOutputParameters->SnowVelocityInput = SnowVelocityInput;
@@ -127,12 +129,18 @@ void FSnowDataOutputPass::DrawVelocity(FRHICommandListImmediate& RHICommandList,
     SnowVelocityHeightOutputParameters->SnowVelocityHeightOutput = SnowVelocityHeightOutputUAV;
     SnowVelocityHeightOutputParameters->TextureSize = FIntPoint(RenderData->SizeX, RenderData->SizeY);
     SnowVelocityHeightOutputParameters->DeltaTime = RenderData->DeltaTime;
-    
+
     auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
     FComputeShaderUtils::AddPass(GraphBuilder, RDG_EVENT_NAME("SnowVelocityHeightOutput"), SnowVelocityHeightOutputComputeShader, SnowVelocityHeightOutputParameters, GroupCount);
-    
+
     FRDGTextureRef SnowVelocityNormalOutput = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityNormalOutputData->GetRenderTargetTexture(), TEXT("SnowVelocityNormal_ExternalOutput"));
     CommonShaderCS::AddHeightToNormalPass(GraphBuilder,SnowVelocityHeightOutput,SnowVelocityNormalOutput,RenderData->FeatureLevel,TEXT("SnowHeightToNormal"));
+}
 
+void FSnowDataOutputPass::DrawVelocity(FRHICommandListImmediate& RHICommandList,
+    const FSnowInteractiveRenderData* RenderData)
+{
+    FRDGBuilder GraphBuilder(RHICommandList);
+    AddVelocityPass(GraphBuilder, RenderData);
     GraphBuilder.Execute();
 }

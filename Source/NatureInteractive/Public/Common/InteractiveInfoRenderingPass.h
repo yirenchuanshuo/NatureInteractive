@@ -1,5 +1,6 @@
-﻿#pragma once
+#pragma once
 #include "Rendering/CustomRenderPass.h"
+#include "Templates/Function.h"
 
 class FInteractiveInfoCustomRenderPassBase : public FCustomRenderPassBase
 {
@@ -24,7 +25,10 @@ public:
 	virtual void OnPostRender(FRDGBuilder& GraphBuilder) override;
 
 	void SetRenderTargetTexture(FRenderTarget* InRenderTargetTexture);
+	void SetPostRenderGraphCallback(TFunction<void(FRDGBuilder&)>&& InPostRenderGraphCallback);
 
 	FRenderTarget* InteractiveInfoRenderTarget = nullptr;
+	TFunction<void(FRDGBuilder&)> PostRenderGraphCallback;
+
 };
 
