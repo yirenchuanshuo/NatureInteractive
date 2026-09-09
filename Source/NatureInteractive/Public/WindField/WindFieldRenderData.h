@@ -1,11 +1,22 @@
 #pragma once
 
+#include "RenderGraphDefinitions.h"
+
 class UWindFieldComponent;
 class UWindMotorComponent;
 
 static constexpr UINT WindFieldThreadX = 8;
 static constexpr UINT WindFieldThreadY = 8;
 static constexpr UINT WindFieldThreadZ = 4;
+
+// A trio of RDG 3D textures representing the wind-field velocity components (X / Y / Z)
+// that flow between passes inside a single GraphBuilder.
+struct FWindFieldRDGVelocity
+{
+	FRDGTextureRef X = nullptr;
+	FRDGTextureRef Y = nullptr;
+	FRDGTextureRef Z = nullptr;
+};
 
 class FWindFieldRenderData
 {

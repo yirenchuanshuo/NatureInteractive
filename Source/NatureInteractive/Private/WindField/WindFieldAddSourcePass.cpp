@@ -5,10 +5,7 @@
 #include "ShaderParameterStruct.h"
 #include "WindField/FWindMotorRenderData.h"
 #include "WindField/WindFieldRenderData.h"
-//SHADER_PARAMETER(FVector3f,MotorWorldPosition)
-//SHADER_PARAMETER(float,MotorForce)
-//SHADER_PARAMETER(float,MotorIncidence)
-//SHADER_PARAMETER(FVector3f,MotorForceDir)
+
 class FWindFieldComputeShader_AddSourceCS : public FGlobalShader
 {
 	DECLARE_SHADER_TYPE(FWindFieldComputeShader_AddSourceCS, Global);
@@ -47,27 +44,18 @@ class FWindFieldComputeShader_AddSourceCS : public FGlobalShader
 };
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_AddSourceCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldAddSource.usf"), TEXT("WindFieldAddSourceCS"), SF_Compute);
 
-void WindFieldAddSourcePass::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)
+void WindFieldAddSourcePass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData,
+                                     const FWindMotorRenderDataManager& WindMotorRenderDataManager,
+                                     FWindFieldRDGVelocity& VelocityInOut)
 {
-	FRDGBuilder GraphBuilder(RHICommandList);
-
-	FRDGTextureRef WindFieldSourceX_Previous = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldSourceX_Previous"));
-	FRDGTextureRef WindFieldSourceY_Previous = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldSourceY_Previous"));
-	FRDGTextureRef WindFieldSourceZ_Previous = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldSourceZ_Previous"));
-	
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
 			FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
 			PF_R32_FLOAT,
 			FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
 
-	FRDGTextureRef WindFieldSourceX = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldSourceX"));
-	FRDGTextureUAVRef WindFieldSourceXUAV = GraphBuilder.CreateUAV(WindFieldSourceX);
-
-	FRDGTextureRef WindFieldSourceY = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldSourceY"));
-	FRDGTextureUAVRef WindFieldSourceYUAV = GraphBuilder.CreateUAV(WindFieldSourceY);
-
-	FRDGTextureRef WindFieldSourceZ = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldSourceZ"));
-	FRDGTextureUAVRef WindFieldSourceZUAV = GraphBuilder.CreateUAV(WindFieldSourceZ);
+	FRDGTextureRef OutX = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldSourceX"));
+	FRDGTextureRef OutY = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldSourceY"));
+	FRDGTextureRef OutZ = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldSourceZ"));
 
 	TArray<FWindMotorRenderData> WindMotorRenderDatas;
 	WindMotorRenderDataManager.WindMotorRenderDatasMap.GenerateValueArray(WindMotorRenderDatas);
@@ -80,38 +68,55 @@ void WindFieldAddSourcePass::Draw(FRHICommandListImmediate& RHICommandList,const
 	}
 
 	TShaderMapRef<FWindFieldComputeShader_AddSourceCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
-	FWindFieldComputeShader_AddSourceCS::FParameters* WindFieldAddSourceParameters = GraphBuilder.AllocParameters<FWindFieldComputeShader_AddSourceCS::FParameters>();
+	FWindFieldComputeShader_AddSourceCS::FParameters* Params = GraphBuilder.AllocParameters<FWindFieldComputeShader_AddSourceCS::FParameters>();
 
-	
-	WindFieldAddSourceParameters->WindFieldSourceXPrevious= WindFieldSourceX_Previous;
-	WindFieldAddSourceParameters->WindFieldSourceYPrevious = WindFieldSourceY_Previous;
-	WindFieldAddSourceParameters->WindFieldSourceZPrevious = WindFieldSourceZ_Previous;
-	WindFieldAddSourceParameters->WindFieldSourceXOutput = WindFieldSourceXUAV;
-	WindFieldAddSourceParameters->WindFieldSourceYOutput = WindFieldSourceYUAV;
-	WindFieldAddSourceParameters->WindFieldSourceZOutput = WindFieldSourceZUAV;
-	WindFieldAddSourceParameters->WindFieldWorldPosition = SetupData.WindFieldWorldPosition - SetupData.WindFieldSize/2;
-	WindFieldAddSourceParameters->WindMotorBuffer = GraphBuilder.CreateSRV(WindMotorBuffer);
-	WindFieldAddSourceParameters->UnitSize = SetupData.UintSize;
-	WindFieldAddSourceParameters->DeltaTime = SetupData.DeltaTime;
-	WindFieldAddSourceParameters->MotorNum = MotorNum;
-	
-	
+	Params->WindFieldSourceXPrevious = VelocityInOut.X;
+	Params->WindFieldSourceYPrevious = VelocityInOut.Y;
+	Params->WindFieldSourceZPrevious = VelocityInOut.Z;
+	Params->WindFieldSourceXOutput = GraphBuilder.CreateUAV(OutX);
+	Params->WindFieldSourceYOutput = GraphBuilder.CreateUAV(OutY);
+	Params->WindFieldSourceZOutput = GraphBuilder.CreateUAV(OutZ);
+	Params->WindFieldWorldPosition = SetupData.WindFieldWorldPosition - SetupData.WindFieldSize/2;
+	Params->WindMotorBuffer = GraphBuilder.CreateSRV(WindMotorBuffer);
+	Params->UnitSize = SetupData.UintSize;
+	Params->DeltaTime = SetupData.DeltaTime;
+	Params->MotorNum = MotorNum;
+
 	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_AddSourceCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_AddSourceCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_AddSourceCS::ThreadZ);
 	GraphBuilder.AddPass(
-	RDG_EVENT_NAME("WindFieldDataAddSourceComputeShader"),
-	WindFieldAddSourceParameters,
-	ERDGPassFlags::AsyncCompute,
-	[WindFieldComputeShader,WindFieldAddSourceParameters,GroupCount](FRHIComputeCommandList& RHICmdList)
-	{
-		FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *WindFieldAddSourceParameters,GroupCount);
-	});
-	
-	
+		RDG_EVENT_NAME("WindFieldAddSourceComputeShader"),
+		Params,
+		ERDGPassFlags::AsyncCompute,
+		[WindFieldComputeShader, Params, GroupCount](FRHIComputeCommandList& RHICmdList)
+		{
+			FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *Params, GroupCount);
+		});
+
+	VelocityInOut.X = OutX;
+	VelocityInOut.Y = OutY;
+	VelocityInOut.Z = OutZ;
+}
+
+void WindFieldAddSourcePass::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)
+{
+	FRDGBuilder GraphBuilder(RHICommandList);
+
+	FWindFieldRDGVelocity Velocity;
+	Velocity.X = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldSourceX_Previous"));
+	Velocity.Y = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldSourceY_Previous"));
+	Velocity.Z = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldSourceZ_Previous"));
+
+	FRDGTextureRef InX = Velocity.X;
+	FRDGTextureRef InY = Velocity.Y;
+	FRDGTextureRef InZ = Velocity.Z;
+
+	AddPass(GraphBuilder, SetupData, WindMotorRenderDataManager, Velocity);
+
 	FRHICopyTextureInfo CopyInfo;
 	CopyInfo.Size = FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
-	AddCopyTexturePass(GraphBuilder,WindFieldSourceX,WindFieldSourceX_Previous,CopyInfo);
-	AddCopyTexturePass(GraphBuilder,WindFieldSourceY,WindFieldSourceY_Previous,CopyInfo);
-	AddCopyTexturePass(GraphBuilder,WindFieldSourceZ,WindFieldSourceZ_Previous,CopyInfo);
+	AddCopyTexturePass(GraphBuilder, Velocity.X, InX, CopyInfo);
+	AddCopyTexturePass(GraphBuilder, Velocity.Y, InY, CopyInfo);
+	AddCopyTexturePass(GraphBuilder, Velocity.Z, InZ, CopyInfo);
 	GraphBuilder.Execute();
 }
 
@@ -122,4 +127,3 @@ FRDGBufferRef WindFieldAddSourcePass::CreateWindMotorBuffer(FRDGBuilder& GraphBu
 	FRDGBufferRef WindMotorBuffer = GraphBuilder.CreateBuffer(Desc, TEXT("WindMotorBuffer"));
 	return	WindMotorBuffer;
 }
-

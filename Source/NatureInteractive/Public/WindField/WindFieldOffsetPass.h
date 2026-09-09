@@ -1,11 +1,17 @@
 #pragma once
 
+#include "WindFieldRenderData.h"
 
 class UWindFieldComponent;
-class FWindFieldRenderData;
+class FRDGBuilder;
 
 class WindFieldOffsetPass
 {
 public:
-	void Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData);
+	// Add the offset pass into an existing GraphBuilder. VelocityInOut is read as input
+	// and replaced with the newly-produced RDG textures.
+	void AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData, FWindFieldRDGVelocity& VelocityInOut);
+
+	// Legacy standalone entry point (creates and executes its own GraphBuilder).
+	void Draw(FRHICommandListImmediate& RHICommandList, const FWindFieldRenderData& SetupData);
 };
