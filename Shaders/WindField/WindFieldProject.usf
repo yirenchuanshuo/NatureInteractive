@@ -8,7 +8,7 @@ Texture3D<float> WindFieldPressureInput;
 RWTexture3D<float> WindFieldPressureOutput;
 RWTexture3D<float> WindFieldDivergenceOutput;
 
-float4 NumCells;
+float3 NumCells;
 
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
