@@ -46,10 +46,11 @@ void USnowInteractiveComponent::BeginPlay()
 	}
 	if (!SnowInteractiveActor)
 	{
-		FActorSpawnParameters Params;
+		/*FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		SnowInteractiveActor = GetWorld()->SpawnActor<ACustomDataCapture>(
-			ACustomDataCapture::StaticClass(), Params);
+			ACustomDataCapture::StaticClass(), Params);*/
+		return;
 	}
 
 	SnowInteractiveRender->InitRenderProcess(*this);
@@ -85,6 +86,10 @@ void USnowInteractiveComponent::TickComponent(float DeltaTime, ELevelTick TickTy
                                               FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (!SnowInteractiveActor)
+	{
+		return;
+	}
 	UpdateOffsetData(DeltaTime);
 	UpdateSnowDataParameterCollection();
 
