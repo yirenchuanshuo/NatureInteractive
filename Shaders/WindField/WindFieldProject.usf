@@ -8,7 +8,7 @@ Texture3D<float> WindFieldPressureInput;
 RWTexture3D<float> WindFieldPressureOutput;
 RWTexture3D<float> WindFieldDivergenceOutput;
 
-float3 NumCells;
+float4 NumCells;
 
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
@@ -16,7 +16,7 @@ void WindFieldProjectFirstCS(uint3 ThreadId : SV_DispatchThreadID)
 {
 	float h = 1.0/NumCells.x;
 	uint3 pos = ThreadId;
-	uint3 WindCellSize = NumCells - 1;
+	uint3 WindCellSize = NumCells.xyz - 1;
 
 	uint3 PosRight = pos;
 	PosRight.x = min(PosRight.x + 1,WindCellSize.x);
@@ -52,7 +52,7 @@ void WindFieldProjectSecondCS(uint3 ThreadId : SV_DispatchThreadID)
 	uint3 pos = ThreadId;
 	float Div = WindFieldDivergenceInput[pos];
 	
-	uint3 WindCellSize = NumCells - 1;
+	uint3 WindCellSize = NumCells.xyz - 1;
 	
 	uint3 PosRight = pos;
 	PosRight.x = min(PosRight.x + 1, WindCellSize.x);
