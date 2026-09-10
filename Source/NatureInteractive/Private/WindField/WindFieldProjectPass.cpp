@@ -19,6 +19,7 @@ class FWindFieldComputeShader_ProjectFirstCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldDivergenceOutput)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldPressureOutput)
 		SHADER_PARAMETER(FVector3f,NumCells)
+		SHADER_PARAMETER(FVector3f,CellSize)
 	END_SHADER_PARAMETER_STRUCT()
 
 	public:
@@ -34,9 +35,9 @@ class FWindFieldComputeShader_ProjectFirstCS : public FGlobalShader
 		OutEnvironment.SetDefine(TEXT("SIZE_Z"), ThreadZ);
 	}
 
-	static constexpr uint32 ThreadX = 8;
-	static constexpr uint32 ThreadY = 8;
-	static constexpr uint32 ThreadZ = 4;
+	static constexpr uint32 ThreadX = WindFieldThreadX;
+	static constexpr uint32 ThreadY = WindFieldThreadY;
+	static constexpr uint32 ThreadZ = WindFieldThreadZ;
 };
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_ProjectFirstCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldProject.usf"), TEXT("WindFieldProjectFirstCS"), SF_Compute);
 
@@ -49,6 +50,7 @@ class FWindFieldComputeShader_ProjectSecondCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_TEXTURE(Texture3D, WindFieldPressureInput)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldPressureOutput)
 		SHADER_PARAMETER(FVector3f,NumCells)
+		SHADER_PARAMETER(FVector3f,CellSize)
 	END_SHADER_PARAMETER_STRUCT()
 	public:
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -63,9 +65,9 @@ class FWindFieldComputeShader_ProjectSecondCS : public FGlobalShader
 		OutEnvironment.SetDefine(TEXT("SIZE_Z"), ThreadZ);
 	}
 
-	static constexpr uint32 ThreadX = 8;
-	static constexpr uint32 ThreadY = 8;
-	static constexpr uint32 ThreadZ = 4;
+	static constexpr uint32 ThreadX = WindFieldThreadX;
+	static constexpr uint32 ThreadY = WindFieldThreadY;
+	static constexpr uint32 ThreadZ = WindFieldThreadZ;
 };
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_ProjectSecondCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldProject.usf"), TEXT("WindFieldProjectSecondCS"), SF_Compute);
 
@@ -82,6 +84,7 @@ class FWindFieldComputeShader_ProjectThirdCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldVelocityYOutput)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldVelocityZOutput)
 		SHADER_PARAMETER(FVector3f,NumCells)
+		SHADER_PARAMETER(FVector3f,CellSize)
 	END_SHADER_PARAMETER_STRUCT()
 
 	public:
@@ -97,9 +100,9 @@ class FWindFieldComputeShader_ProjectThirdCS : public FGlobalShader
 		OutEnvironment.SetDefine(TEXT("SIZE_Z"), ThreadZ);
 	}
 
-	static constexpr uint32 ThreadX = 8;
-	static constexpr uint32 ThreadY = 8;
-	static constexpr uint32 ThreadZ = 4;
+	static constexpr uint32 ThreadX = WindFieldThreadX;
+	static constexpr uint32 ThreadY = WindFieldThreadY;
+	static constexpr uint32 ThreadZ = WindFieldThreadZ;
 };
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_ProjectThirdCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldProjectContinue.usf"), TEXT("WindFieldProjectThirdCS"), SF_Compute);
 
@@ -111,7 +114,7 @@ void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRe
 			PF_R32_FLOAT,
 			FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
 
-	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_ProjectFirstCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_ProjectFirstCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_ProjectFirstCS::ThreadZ);
+	auto GroupCount = SetupData.GetGroupCount();
 
 	// -------------------------------------------------------------
 	// Stage 1: compute divergence + zero-initial pressure from current velocity
@@ -128,6 +131,7 @@ void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRe
 		Params->WindFieldDivergenceOutput = GraphBuilder.CreateUAV(Divergence);
 		Params->WindFieldPressureOutput = GraphBuilder.CreateUAV(Pressure);
 		Params->NumCells = FVector3f(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
+		Params->CellSize = SetupData.CellSize;
 
 		ClearUnusedGraphResources(WindFieldComputeShader, Params);
 
@@ -146,7 +150,7 @@ void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRe
 	// -------------------------------------------------------------
 	{
 		TShaderMapRef<FWindFieldComputeShader_ProjectSecondCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
-		for (int32 i = 0; i <= SetupData.ProjectionPressureIterations; ++i)
+		for (int32 i = 0; i < SetupData.ProjectionPressureIterations; ++i)
 		{
 			FRDGTextureRef PressureOut = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldPressureIter"));
 
@@ -155,6 +159,7 @@ void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRe
 			Params->WindFieldPressureInput = Pressure;
 			Params->WindFieldPressureOutput = GraphBuilder.CreateUAV(PressureOut);
 			Params->NumCells = FVector3f(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
+			Params->CellSize = SetupData.CellSize;
 
 			GraphBuilder.AddPass(
 				RDG_EVENT_NAME("WindFieldProjectSecondComputeShader"),
@@ -186,6 +191,7 @@ void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRe
 		Params->WindFieldVelocityYOutput = GraphBuilder.CreateUAV(VelYOut);
 		Params->WindFieldVelocityZOutput = GraphBuilder.CreateUAV(VelZOut);
 		Params->NumCells = FVector3f(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
+		Params->CellSize = SetupData.CellSize;
 
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("WindFieldProjectThirdComputeShader"),
@@ -200,140 +206,4 @@ void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRe
 	VelocityInOut.X = VelXOut;
 	VelocityInOut.Y = VelYOut;
 	VelocityInOut.Z = VelZOut;
-}
-
-
-// ------------------- Legacy per-stage draws (kept for API compatibility) -------------------
-
-void WindFieldProjectPass::DrawFirst(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData)
-{
-	FRDGBuilder GraphBuilder(RHICommandList);
-	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
-				FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
-				PF_R32_FLOAT,
-				FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
-	
-	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_ProjectFirstCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_ProjectFirstCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_ProjectFirstCS::ThreadZ);
-
-	FRDGTextureRef WindFieldVelocityXInput = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldVelocityXInput"));
-	FRDGTextureRef WindFieldVelocityYInput = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldVelocityYInput"));
-	FRDGTextureRef WindFieldVelocityZInput = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldVelocityZInput"));
-
-	FRDGTextureRef WindFieldDivergence = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldDivergence"));
-	FRDGTextureRef WindFieldPressure = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldPressure"));
-
-	TShaderMapRef<FWindFieldComputeShader_ProjectFirstCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
-	FWindFieldComputeShader_ProjectFirstCS::FParameters* Params = GraphBuilder.AllocParameters<FWindFieldComputeShader_ProjectFirstCS::FParameters>();
-
-	Params->WindFieldVelocityXInput = WindFieldVelocityXInput;
-	Params->WindFieldVelocityYInput = WindFieldVelocityYInput;
-	Params->WindFieldVelocityZInput = WindFieldVelocityZInput;
-	Params->WindFieldDivergenceOutput = GraphBuilder.CreateUAV(WindFieldDivergence);
-	Params->WindFieldPressureOutput = GraphBuilder.CreateUAV(WindFieldPressure);
-	Params->NumCells = FVector3f(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
-
-	ClearUnusedGraphResources(WindFieldComputeShader, Params);
-
-	GraphBuilder.AddPass(
-		RDG_EVENT_NAME("WindFieldProjectFirstComputeShader"),
-		Params,
-		ERDGPassFlags::AsyncCompute,
-		[WindFieldComputeShader, Params, GroupCount](FRHIComputeCommandList& RHICmdList)
-		{
-			FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *Params, GroupCount);
-		});
-
-	GraphBuilder.QueueTextureExtraction(WindFieldDivergence, &WindFieldDivergenceSecondRHI);
-	GraphBuilder.QueueTextureExtraction(WindFieldPressure, &WindFieldPressureSecondRHI);
-	GraphBuilder.Execute();
-}
-
-void WindFieldProjectPass::DrawSecond(FRHICommandListImmediate& RHICommandList, const FWindFieldRenderData& SetupData)
-{
-	FRDGBuilder GraphBuilder(RHICommandList);
-	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
-				FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
-				PF_R32_FLOAT,
-				FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
-
-	FRDGTextureRef Divergence = RegisterExternalTexture(GraphBuilder, WindFieldDivergenceSecondRHI->GetRHI(), TEXT("WindFieldDivergence"));
-	FRDGTextureRef PressureIn = RegisterExternalTexture(GraphBuilder, WindFieldPressureSecondRHI->GetRHI(), TEXT("WindFieldPressure"));
-
-	FRDGTextureRef PressureOut = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldPressureOutput"));
-
-	TShaderMapRef<FWindFieldComputeShader_ProjectSecondCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
-	FWindFieldComputeShader_ProjectSecondCS::FParameters* Params = GraphBuilder.AllocParameters<FWindFieldComputeShader_ProjectSecondCS::FParameters>();
-
-	Params->WindFieldDivergenceInput = Divergence;
-	Params->WindFieldPressureInput = PressureIn;
-	Params->WindFieldPressureOutput = GraphBuilder.CreateUAV(PressureOut);
-	Params->NumCells = FVector3f(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
-
-	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_ProjectSecondCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_ProjectSecondCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_ProjectSecondCS::ThreadZ);
-	FRHICopyTextureInfo CopyInfo;
-	CopyInfo.Size = FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
-
-	for (int32 i = 0; i <= SetupData.ProjectionPressureIterations; ++i)
-	{
-		GraphBuilder.AddPass(
-			RDG_EVENT_NAME("WindFieldProjectSecondComputeShader"),
-			Params,
-			ERDGPassFlags::AsyncCompute,
-			[WindFieldComputeShader, Params, GroupCount](FRHIComputeCommandList& RHICmdList)
-			{
-				FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *Params, GroupCount);
-			});
-		AddCopyTexturePass(GraphBuilder, PressureOut, PressureIn, CopyInfo);
-	}
-
-	GraphBuilder.QueueTextureExtraction(PressureOut, &WindFieldPressureThridRHI);
-	GraphBuilder.Execute();
-}
-
-void WindFieldProjectPass::DrawThird(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData)
-{
-	FRDGBuilder GraphBuilder(RHICommandList);
-	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
-				FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
-				PF_R32_FLOAT,
-				FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
-
-	FRDGTextureRef Pressure = RegisterExternalTexture(GraphBuilder, WindFieldPressureThridRHI->GetRHI(), TEXT("WindFieldPressure"));
-	FRDGTextureRef VelXIn = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldVelocityXInput"));
-	FRDGTextureRef VelYIn = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldVelocityYInput"));
-	FRDGTextureRef VelZIn = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldVelocityZInput"));
-
-	FRDGTextureRef VelXOut = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldVelocityXOutput"));
-	FRDGTextureRef VelYOut = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldVelocityYOutput"));
-	FRDGTextureRef VelZOut = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldVelocityZOutput"));
-
-	TShaderMapRef<FWindFieldComputeShader_ProjectThirdCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
-	FWindFieldComputeShader_ProjectThirdCS::FParameters* Params = GraphBuilder.AllocParameters<FWindFieldComputeShader_ProjectThirdCS::FParameters>();
-
-	Params->WindFieldVelocityXInput = VelXIn;
-	Params->WindFieldVelocityYInput = VelYIn;
-	Params->WindFieldVelocityZInput = VelZIn;
-	Params->WindFieldPressureInput = Pressure;
-	Params->WindFieldVelocityXOutput = GraphBuilder.CreateUAV(VelXOut);
-	Params->WindFieldVelocityYOutput = GraphBuilder.CreateUAV(VelYOut);
-	Params->WindFieldVelocityZOutput = GraphBuilder.CreateUAV(VelZOut);
-	Params->NumCells = FVector3f(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
-
-	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_ProjectThirdCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_ProjectThirdCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_ProjectThirdCS::ThreadZ);
-
-	GraphBuilder.AddPass(
-		RDG_EVENT_NAME("WindFieldProjectThirdComputeShader"),
-		Params,
-		ERDGPassFlags::AsyncCompute,
-		[WindFieldComputeShader, Params, GroupCount](FRHIComputeCommandList& RHICmdList)
-		{
-			FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *Params, GroupCount);
-		});
-
-	FRHICopyTextureInfo CopyInfo;
-	CopyInfo.Size = FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
-	AddCopyTexturePass(GraphBuilder, VelXOut, VelXIn, CopyInfo);
-	AddCopyTexturePass(GraphBuilder, VelYOut, VelYIn, CopyInfo);
-	AddCopyTexturePass(GraphBuilder, VelZOut, VelZIn, CopyInfo);
-	GraphBuilder.Execute();
 }

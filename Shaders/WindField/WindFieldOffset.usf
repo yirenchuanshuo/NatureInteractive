@@ -7,75 +7,34 @@ RWTexture3D<float>WindFieldVelocityXOutput;
 RWTexture3D<float> WindFieldVelocityYOutput;
 RWTexture3D<float> WindFieldVelocityZOutput;
 
-float3 MoveVelocity;
+// Whole-cell shift for this frame, already rounded on the CPU (the sub-cell remainder is carried
+// across frames there). Kept as float3 because shader parameters are float-typed.
+float3 CellOffset;
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldOffsetCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	int3 pos = ThreadId.xyz;
-	int3 FinalPos = pos + int3(MoveVelocity);
-	int3 MaxSize;
-	WindFieldVelocityXOutput.GetDimensions(MaxSize.x, MaxSize.y, MaxSize.z);
-	FinalPos = clamp(FinalPos, int3(0,0,0), MaxSize-1);
+	int3 pos = int3(ThreadId);
 
-	WindFieldVelocityXOutput[ThreadId] = WindFieldVelocityXInput[FinalPos];
-	WindFieldVelocityYOutput[ThreadId] = WindFieldVelocityYInput[FinalPos];
-	WindFieldVelocityZOutput[ThreadId] = WindFieldVelocityZInput[FinalPos];
-	/*float x = pos.x + MoveVelocity.x;
-	float y = pos.y + MoveVelocity.y;
-	float z = pos.z + MoveVelocity.z;
+	uint3 Dimensions;
+	WindFieldVelocityXOutput.GetDimensions(Dimensions.x, Dimensions.y, Dimensions.z);
+	int3 MaxIdx = int3(Dimensions) - 1;
 
-	int x0 = int(x);
-	int y0 = int(y);
-	int z0 = int(z);
+	// GroupCount rounds up, so the last group can contain threads past the texture bounds.
+	if (any(pos > MaxIdx))
+	{
+		return;
+	}
 
-	float x1 = x0 + 1;
-	float y1 = y0 + 1;
-	float z1 = z0 + 1;
+	// round() guards against the value arriving as 2.9999 and truncating to 2.
+	int3 FinalPos = pos + int3(round(CellOffset));
 
-	float xd = (x-x0)/(x1-x0);
-	float yd = (y-y0)/(y1-y0);
-	float zd = (z-z0)/(z1-z0);
+	// Cells scrolling in from outside the previous field extent have no history, so they must read as
+	// "no wind". Clamping to the border instead (the old behaviour) smeared the edge row across the
+	// newly exposed region and produced streaks trailing along the movement direction.
+	bool bInside = all(FinalPos >= 0) && all(FinalPos <= MaxIdx);
 
-	float VX000 = WindFieldVelocityXInput[uint3(x0,y0,z0)];
-	float VX100 = WindFieldVelocityXInput[uint3(x1,y0,z0)];
-	float VX010 = WindFieldVelocityXInput[uint3(x0,y1,z0)];
-	float VX001 = WindFieldVelocityXInput[uint3(x0,y0,z1)];
-	float VX101 = WindFieldVelocityXInput[uint3(x1,y0,z1)];
-	float VX011 = WindFieldVelocityXInput[uint3(x0,y1,z1)];
-	float VX110 = WindFieldVelocityXInput[uint3(x1,y1,z0)];
-	float VX111 = WindFieldVelocityXInput[uint3(x1,y1,z1)];
-
-	float VY000 = WindFieldVelocityYInput[uint3(x0,y0,z0)];
-	float VY100 = WindFieldVelocityYInput[uint3(x1,y0,z0)];
-	float VY010 = WindFieldVelocityYInput[uint3(x0,y1,z0)];
-	float VY001 = WindFieldVelocityYInput[uint3(x0,y0,z1)];
-	float VY101 = WindFieldVelocityYInput[uint3(x1,y0,z1)];
-	float VY011 = WindFieldVelocityYInput[uint3(x0,y1,z1)];
-	float VY110 = WindFieldVelocityYInput[uint3(x1,y1,z0)];
-	float VY111 = WindFieldVelocityYInput[uint3(x1,y1,z1)];
-
-	float VZ000 = WindFieldVelocityZInput[uint3(x0,y0,z0)];
-	float VZ100 = WindFieldVelocityZInput[uint3(x1,y0,z0)];
-	float VZ010 = WindFieldVelocityZInput[uint3(x0,y1,z0)];
-	float VZ001 = WindFieldVelocityZInput[uint3(x0,y0,z1)];
-	float VZ101 = WindFieldVelocityZInput[uint3(x1,y0,z1)];
-	float VZ011 = WindFieldVelocityZInput[uint3(x0,y1,z1)];
-	float VZ110 = WindFieldVelocityZInput[uint3(x1,y1,z0)];
-	float VZ111 = WindFieldVelocityZInput[uint3(x1,y1,z1)];
-
-	float3 V000 = float3(VX000,VY000,VZ000);
-	float3 V100 = float3(VX100,VY100,VZ100);
-	float3 V010 = float3(VX010,VY010,VZ010);
-	float3 V001 = float3(VX001,VY001,VZ001);
-	float3 V101 = float3(VX101,VY101,VZ101);
-	float3 V011 = float3(VX011,VY011,VZ011);
-	float3 V110 = float3(VX110,VY110,VZ110);
-	float3 V111 = float3(VX111,VY111,VZ111);
-
-	float3 V = lerp(lerp(lerp(V000,V100,xd),lerp(V010,V110,xd),yd),lerp(lerp(V001,V101,xd),lerp(V011,V111,xd),yd),zd);
-
-	WindFieldVelocityXOutput[ThreadId] = V.x;
-	WindFieldVelocityYOutput[ThreadId] = V.y;
-	WindFieldVelocityZOutput[ThreadId] = V.z;*/
+	WindFieldVelocityXOutput[pos] = bInside ? WindFieldVelocityXInput[FinalPos] : 0.0f;
+	WindFieldVelocityYOutput[pos] = bInside ? WindFieldVelocityYInput[FinalPos] : 0.0f;
+	WindFieldVelocityZOutput[pos] = bInside ? WindFieldVelocityZInput[FinalPos] : 0.0f;
 }

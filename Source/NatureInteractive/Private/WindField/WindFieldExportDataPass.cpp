@@ -30,9 +30,11 @@ class FWindFieldComputeShader_DataExportCS : public FGlobalShader
 	}
 
 
-	static constexpr uint32 ThreadX = 8;
-	static constexpr uint32 ThreadY = 4;
-	static constexpr uint32 ThreadZ = 8;
+	// Was (8,4,8) while every other pass used (8,8,4). Divergent group sizes meant a single shared
+	// GroupCount could not be correct for all passes.
+	static constexpr uint32 ThreadX = WindFieldThreadX;
+	static constexpr uint32 ThreadY = WindFieldThreadY;
+	static constexpr uint32 ThreadZ = WindFieldThreadZ;
 };
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_DataExportCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldDataExport.usf"), TEXT("WindFieldDataExportCS"), SF_Compute);
 
@@ -57,7 +59,7 @@ void WindFieldExportDataPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFiel
 	Params->WindFieldVelocityZInput = VelocityInOut.Z;
 	Params->WindFieldVelocityOutput = GraphBuilder.CreateUAV(WindFieldVelocity);
 
-	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_DataExportCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_DataExportCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_DataExportCS::ThreadZ);
+	auto GroupCount = SetupData.GetGroupCount();
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("WindFieldDataExportComputeShader"),
 		Params,

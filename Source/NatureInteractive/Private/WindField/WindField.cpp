@@ -31,7 +31,7 @@ void AWindField::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	WindFieldComponent->UpdateRenderData(DeltaTime);
-	WindMotorRenderDataManager->SetTickData();
+	WindMotorRenderDataManager->SetTickData(DeltaTime);
 	WindFieldRenderManager->Render(*WindFieldComponent->WindFieldRenderData,*WindMotorRenderDataManager.Get());
 	WindFieldComponent->UpdatePreviousRenderData();
 	WindMotorRenderDataManager->UpdatePreviousData();

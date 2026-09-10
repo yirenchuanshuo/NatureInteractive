@@ -6,13 +6,24 @@ RWTexture3D<float> WindFieldAdvectX;
 RWTexture3D<float> WindFieldAdvectY;
 RWTexture3D<float> WindFieldAdvectZ;
 float3 NumCells;
+float3 CellSize;
 float DeltaTime;
+float DampingRate;
 
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldAdvectCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	float3 Dt0 = DeltaTime * NumCells;
+	// GroupCount rounds up, so the last group can contain threads past the texture bounds.
+	if (any(ThreadId >= uint3(NumCells)))
+	{
+		return;
+	}
+
+	// Velocity is stored in world units (cm/s). Converting a displacement into cell units is
+	// therefore (v * dt) / CellSize -- NOT v * dt * NumCells (that assumed a normalised [0,1] domain
+	// and over-scaled the backtrace by NumCells * CellSize).
+	float3 Dt0 = DeltaTime / CellSize;
 	float i = ThreadId.x;
 	float j = ThreadId.y;
 	float k = ThreadId.z;
@@ -29,17 +40,23 @@ void WindFieldAdvectCS(uint3 ThreadId : SV_DispatchThreadID)
 	y = clamp(y,0.5,NumCells.y-0.5);
 	z = clamp(z,0.5,NumCells.z-0.5);
 
+	int3 MaxIdx = int3(NumCells) - 1;
+
 	int x0 = int(x);
 	int y0 = int(y);
 	int z0 = int(z);
 
-	float x1 = x0 + 1;
-	float y1 = y0 + 1;
-	float z1 = z0 + 1;
+	// Clamp the upper corner as well, otherwise the outermost cell samples out of bounds (reads 0)
+	// and the trilinear blend dilutes the border velocity towards zero.
+	int x1 = min(x0 + 1, MaxIdx.x);
+	int y1 = min(y0 + 1, MaxIdx.y);
+	int z1 = min(z0 + 1, MaxIdx.z);
 
-	float xd = (x-x0)/(x1-x0);
-	float yd = (y-y0)/(y1-y0);
-	float zd = (z-z0)/(z1-z0);
+	// Fractional weights taken directly from the floor; dividing by (x1-x0) would be a 0/0 NaN
+	// whenever the upper index got clamped.
+	float xd = saturate(x - x0);
+	float yd = saturate(y - y0);
+	float zd = saturate(z - z0);
 
 	float VX000 = WindFieldDiffusionX[uint3(x0,y0,z0)];
 	float VX100 = WindFieldDiffusionX[uint3(x1,y0,z0)];
@@ -78,7 +95,13 @@ void WindFieldAdvectCS(uint3 ThreadId : SV_DispatchThreadID)
 	float3 V111 = float3(VX111,VY111,VZ111);
 
 	float3 Advect = lerp(lerp(lerp(V000,V100,xd),lerp(V010,V110,xd),yd),lerp(lerp(V001,V101,xd),lerp(V011,V111,xd),yd),zd);
-	
+
+	// Exponential decay. Without this the field only ever gains energy: AddSource accumulates every
+	// frame while diffusion (mass conserving), advection (semi-Lagrangian) and projection (removes
+	// divergence only) all preserve it, so a stationary motor grows the velocity without bound.
+	// Frame-rate independent by construction.
+	Advect *= exp(-DampingRate * DeltaTime);
+
 	WindFieldAdvectX[ThreadId] = Advect.x;
 	WindFieldAdvectY[ThreadId] = Advect.y;
 	WindFieldAdvectZ[ThreadId] = Advect.z;

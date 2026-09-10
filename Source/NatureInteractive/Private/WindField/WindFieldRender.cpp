@@ -17,22 +17,31 @@ WindFieldRender::WindFieldRender()
 
 void WindFieldRender::Render(const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const
 {
+	// Snapshot everything on the calling (game) thread. The caller mutates both RenderData and the
+	// motor map immediately after this returns (UpdatePreviousRenderData / UpdatePreviousData, plus
+	// Register/UnregisterWindMotor at arbitrary times), so capturing them by reference was a data
+	// race and could make the render thread walk a TMap that is being rehashed.
+	FWindFieldRenderData RenderDataCopy = RenderData;
+	TArray<FWindMotorRenderData> WindMotorRenderDatas;
+	WindMotorRenderDataManager.WindMotorRenderDatasMap.GenerateValueArray(WindMotorRenderDatas);
+
 	if(IsInRenderingThread())
 	{
 		FRHICommandListImmediate& RHICmdList = GetImmediateCommandList_ForRenderCommand();
-		Draw(RHICmdList,RenderData,WindMotorRenderDataManager);
+		Draw(RHICmdList,RenderDataCopy,WindMotorRenderDatas);
 	}
 	else
 	{
-		ENQUEUE_RENDER_COMMAND(OceanRenderHZeroTextureCommand)(
-	[&RenderData,&WindMotorRenderDataManager,this](FRHICommandListImmediate& RHICmdList)
+		ENQUEUE_RENDER_COMMAND(WindFieldRenderCommand)(
+		[this, RenderDataCopy = MoveTemp(RenderDataCopy), WindMotorRenderDatas = MoveTemp(WindMotorRenderDatas)]
+		(FRHICommandListImmediate& RHICmdList)
 		{
-			Draw(RHICmdList,RenderData,WindMotorRenderDataManager);
+			Draw(RHICmdList,RenderDataCopy,WindMotorRenderDatas);
 		});
 	}
 }
 
-void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const
+void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData,const TArray<FWindMotorRenderData>& WindMotorRenderDatas)const
 {
 	// One FRDGBuilder for the whole wind-field frame. All passes are recorded, and a
 	// single Execute() at the end lets RDG schedule barriers and async compute together.
@@ -52,9 +61,9 @@ void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const FWindF
 
 	OffsetPass->AddPass(GraphBuilder, RenderData, Velocity);
 
-	if (WindMotorRenderDataManager.WindMotorRenderDatasMap.Num() > 0)
+	if (WindMotorRenderDatas.Num() > 0)
 	{
-		AddSourcePass->AddPass(GraphBuilder, RenderData, WindMotorRenderDataManager, Velocity);
+		AddSourcePass->AddPass(GraphBuilder, RenderData, WindMotorRenderDatas, Velocity);
 	}
 
 	DiffusionPass->AddPass(GraphBuilder, RenderData, Velocity);

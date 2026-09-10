@@ -1,15 +1,16 @@
 #include "/Engine/Private/Common.ush"
 
+// Must stay in sync with FWindMotorRenderData (FWindMotorRenderData.h).
+// Field order is chosen so every float3 starts on a 16-byte boundary, which makes the
+// HLSL packing rules produce the exact same 48-byte stride as the C++ struct.
 struct FWindMotorData
 {
-	//MotorCommonData
-	float Radius;
-	float Strength;
-
-	//MotorTickData
-	float3 PreviousWorldPosition;
 	float3 WorldPosition;
+	float  Radius;
+	float3 PreviousWorldPosition;
+	float  Strength;
 	float3 MoveVelocity;
+	float  DragScale;
 };
 
 Texture3D<float> WindFieldSourceXPrevious;
@@ -19,7 +20,7 @@ RWTexture3D<float> WindFieldSourceXOutput;
 RWTexture3D<float> WindFieldSourceYOutput;
 RWTexture3D<float> WindFieldSourceZOutput;
 float4 WindFieldWorldPosition;
-float UnitSize;
+float3 CellSize;
 float DeltaTime;
 uint MotorNum;
 
@@ -29,20 +30,43 @@ StructuredBuffer<FWindMotorData> WindMotorBuffer;
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldAddSourceCS(uint3 ThreadId : SV_DispatchThreadID)
 {
+	// GroupCount rounds up, so the last group can contain threads past the texture bounds.
+	uint3 Dimensions;
+	WindFieldSourceXOutput.GetDimensions(Dimensions.x, Dimensions.y, Dimensions.z);
+	if (any(ThreadId >= Dimensions))
+	{
+		return;
+	}
+
 	float XForce = WindFieldSourceXPrevious[ThreadId] ;
 	float YForce = WindFieldSourceYPrevious[ThreadId] ;
 	float ZForce = WindFieldSourceZPrevious[ThreadId] ;
 	
-	float3 Position = ThreadId.xyz * UnitSize + WindFieldWorldPosition.xyz;
+	// Per-axis cell size: a scalar unit size mapped the Z axis incorrectly whenever the field was
+	// not a cube. WindFieldWorldPosition is the min corner of the field, and the +0.5 offset puts the
+	// sample at the cell centre rather than its corner (otherwise the whole field sits half a cell
+	// away from where the material samples it).
+	float3 Position = (ThreadId.xyz + 0.5) * CellSize + WindFieldWorldPosition.xyz;
 
 	for(uint i=0;i<MotorNum;i++)
 	{
-		float3 ForceDir = normalize(Position - WindMotorBuffer[i].WorldPosition);
-		float ForceLength = length(Position - WindMotorBuffer[i].WorldPosition);
-		float ForceFalloff = 1 - saturate(ForceLength / WindMotorBuffer[i].Radius);
-		float IsIncident = select(ForceLength<WindMotorBuffer[i].Radius, 1, 0);
-		//float3 OutVelocity = ForceDir * ForceFalloff * WindMotorBuffer[i].Strength * ForceFalloff;
-		float3 OutVelocity = ForceDir *  WindMotorBuffer[i].Strength * IsIncident;
+		float3 Delta = Position - WindMotorBuffer[i].WorldPosition;
+		float Dist = length(Delta);
+
+		// normalize() is 0/0 when a cell centre lands exactly on the motor. A single NaN here spreads
+		// through diffusion/advection within a few frames and never clears, so the divisor is clamped.
+		float3 ForceDir = Delta / max(Dist, 1e-4f);
+
+		// Smooth radial falloff instead of the previous hard in/out switch, which produced a visible
+		// stair-stepped sphere at the radius boundary. Squared for a softer core-to-edge ramp.
+		float Falloff = 1.0 - saturate(Dist / max(WindMotorBuffer[i].Radius, 1e-4f));
+		Falloff *= Falloff;
+
+		// Radial push plus a drag term so a moving motor carries air with it. The drag term is what
+		// makes character movement actually disturb the field; MoveVelocity was previously unused.
+		float3 OutVelocity = ForceDir * WindMotorBuffer[i].Strength
+		                   + WindMotorBuffer[i].MoveVelocity * WindMotorBuffer[i].DragScale;
+		OutVelocity *= Falloff;
 
 		XForce += OutVelocity.x * DeltaTime;
 		YForce += OutVelocity.y * DeltaTime;

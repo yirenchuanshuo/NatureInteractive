@@ -7,6 +7,14 @@ RWTexture3D<float4> WindFieldVelocityOutput;
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldDataExportCS(uint3 ThreadId : SV_DispatchThreadID)
 {
+	// GroupCount rounds up, so the last group can contain threads past the texture bounds.
+	uint3 Dimensions;
+	WindFieldVelocityOutput.GetDimensions(Dimensions.x, Dimensions.y, Dimensions.z);
+	if (any(ThreadId >= Dimensions))
+	{
+		return;
+	}
+
 	float X = WindFieldVelocityXInput[ThreadId];
 	float Y = WindFieldVelocityYInput[ThreadId];
 	float Z = WindFieldVelocityZInput[ThreadId];

@@ -37,8 +37,15 @@ public:
 	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData")
 	TObjectPtr<UMaterialParameterCollection> WindFieldMaterialParameterCollection;
 
-	UPROPERTY(EditDefaultsOnly,Category="WindFieldData")
+	// Fraction blended towards the neighbourhood per second during each diffusion iteration.
+	// Clamped to [0,1] per iteration internally, so any positive value is stable.
+	UPROPERTY(EditDefaultsOnly,Category="WindFieldData",meta = (ClampMin = "0", UIMin = "0", UIMax = "10"))
 	float Diffusion;
+
+	// Exponential velocity decay per second. Required for stability: without it a stationary motor
+	// makes the field gain energy indefinitely. 0 disables damping.
+	UPROPERTY(EditDefaultsOnly,Category="WindFieldData",meta = (ClampMin = "0", UIMin = "0", UIMax = "5"))
+	float DampingRate;
 	
 	UPROPERTY(EditDefaultsOnly,Category = "WindFieldData")
 	FIntVector TexResolution;

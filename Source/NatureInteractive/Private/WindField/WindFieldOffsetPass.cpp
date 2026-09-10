@@ -17,7 +17,7 @@ class FWindFieldComputeShader_OffsetCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldVelocityXOutput)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldVelocityYOutput)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldVelocityZOutput)
-		SHADER_PARAMETER(FVector3f,MoveVelocity)
+		SHADER_PARAMETER(FVector3f,CellOffset)
 	END_SHADER_PARAMETER_STRUCT()
 
 	public:
@@ -34,9 +34,9 @@ class FWindFieldComputeShader_OffsetCS : public FGlobalShader
 	}
 
 
-	static constexpr uint32 ThreadX = 8;
-	static constexpr uint32 ThreadY = 8;
-	static constexpr uint32 ThreadZ = 4;
+	static constexpr uint32 ThreadX = WindFieldThreadX;
+	static constexpr uint32 ThreadY = WindFieldThreadY;
+	static constexpr uint32 ThreadZ = WindFieldThreadZ;
 };
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_OffsetCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldOffset.usf"), TEXT("WindFieldOffsetCS"), SF_Compute);
 
@@ -61,9 +61,9 @@ void WindFieldOffsetPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRen
 	Params->WindFieldVelocityXOutput = GraphBuilder.CreateUAV(OutX);
 	Params->WindFieldVelocityYOutput = GraphBuilder.CreateUAV(OutY);
 	Params->WindFieldVelocityZOutput = GraphBuilder.CreateUAV(OutZ);
-	Params->MoveVelocity = SetupData.WindFieldMoveVelocity;
+	Params->CellOffset = SetupData.WindFieldCellOffset;
 
-	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_OffsetCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_OffsetCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_OffsetCS::ThreadZ);
+	auto GroupCount = SetupData.GetGroupCount();
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("WindFieldOffsetComputeShader"),
 		Params,
@@ -76,27 +76,4 @@ void WindFieldOffsetPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRen
 	VelocityInOut.X = OutX;
 	VelocityInOut.Y = OutY;
 	VelocityInOut.Z = OutZ;
-}
-
-void WindFieldOffsetPass::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData)
-{
-	FRDGBuilder GraphBuilder(RHICommandList);
-
-	FWindFieldRDGVelocity Velocity;
-	Velocity.X = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldVelocityX_Input"));
-	Velocity.Y = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldVelocityY_Input"));
-	Velocity.Z = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldVelocityZ_Input"));
-
-	FRDGTextureRef InX = Velocity.X;
-	FRDGTextureRef InY = Velocity.Y;
-	FRDGTextureRef InZ = Velocity.Z;
-
-	AddPass(GraphBuilder, SetupData, Velocity);
-
-	FRHICopyTextureInfo CopyInfo;
-	CopyInfo.Size = FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
-	AddCopyTexturePass(GraphBuilder, Velocity.X, InX, CopyInfo);
-	AddCopyTexturePass(GraphBuilder, Velocity.Y, InY, CopyInfo);
-	AddCopyTexturePass(GraphBuilder, Velocity.Z, InZ, CopyInfo);
-	GraphBuilder.Execute();
 }

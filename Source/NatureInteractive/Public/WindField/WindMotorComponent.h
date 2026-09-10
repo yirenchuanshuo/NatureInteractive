@@ -36,11 +36,18 @@ public:
 	UPROPERTY()
 	TWeakObjectPtr<AWindField> WindField;
 
-	UPROPERTY(EditDefaultsOnly,Category = "WindMotor")
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "WindMotor")
 	float Radius = 100.0f;
 
-	UPROPERTY(EditDefaultsOnly,Category = "WindMotor")
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "WindMotor")
 	float Strength = 10.0f;
+
+	// How strongly the motor's own movement drags air along with it. 0 disables the drag term and
+	// leaves only the radial push.
+	// Keep this small: MoveVelocity is in cm/s, so a walking character (~600) easily overwhelms
+	// Strength and turns the whole field into "everything blows along the movement direction".
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "WindMotor",meta = (ClampMin = "0", UIMin = "0", UIMax = "1"))
+	float DragScale = 0.2f;
 
 	
 	

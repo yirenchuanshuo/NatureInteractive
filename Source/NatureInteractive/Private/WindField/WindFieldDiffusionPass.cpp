@@ -17,7 +17,8 @@ class FWindFieldComputeShader_DiffusionCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldDiffusionX)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldDiffusionY)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldDiffusionZ)
-		SHADER_PARAMETER(float,NumCells)
+		SHADER_PARAMETER(FVector3f,NumCells)
+		SHADER_PARAMETER(FVector3f,CellSize)
 		SHADER_PARAMETER(float,DeltaTime)
 		SHADER_PARAMETER(float,Diffusion)
 	END_SHADER_PARAMETER_STRUCT()
@@ -35,9 +36,9 @@ class FWindFieldComputeShader_DiffusionCS : public FGlobalShader
 		OutEnvironment.SetDefine(TEXT("SIZE_Z"), ThreadZ);
 	}
 
-	static constexpr uint32 ThreadX = 8;
-	static constexpr uint32 ThreadY = 8;
-	static constexpr uint32 ThreadZ = 4;
+	static constexpr uint32 ThreadX = WindFieldThreadX;
+	static constexpr uint32 ThreadY = WindFieldThreadY;
+	static constexpr uint32 ThreadZ = WindFieldThreadZ;
 };
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_DiffusionCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldDiffusion.usf"), TEXT("WindFieldDiffusionCS"), SF_Compute);
 
@@ -55,7 +56,7 @@ void WindFieldDiffusionPass::AddPass(FRDGBuilder& GraphBuilder, const FWindField
 			FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
 
 	TShaderMapRef<FWindFieldComputeShader_DiffusionCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
-	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_DiffusionCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_DiffusionCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_DiffusionCS::ThreadZ);
+	auto GroupCount = SetupData.GetGroupCount();
 
 	// Ping-pong between VelocityInOut (as source) and a freshly-allocated destination each iteration.
 	for (int i = 0; i < SetupData.DiffusionIterations; ++i)
@@ -71,7 +72,8 @@ void WindFieldDiffusionPass::AddPass(FRDGBuilder& GraphBuilder, const FWindField
 		Params->WindFieldDiffusionX = GraphBuilder.CreateUAV(DstX);
 		Params->WindFieldDiffusionY = GraphBuilder.CreateUAV(DstY);
 		Params->WindFieldDiffusionZ = GraphBuilder.CreateUAV(DstZ);
-		Params->NumCells = SetupData.SizeX*SetupData.SizeY*SetupData.SizeZ;
+		Params->NumCells = FVector3f(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
+		Params->CellSize = SetupData.CellSize;
 		Params->DeltaTime = SetupData.DeltaTime;
 		Params->Diffusion = SetupData.Diffusion;
 
@@ -88,27 +90,4 @@ void WindFieldDiffusionPass::AddPass(FRDGBuilder& GraphBuilder, const FWindField
 		VelocityInOut.Y = DstY;
 		VelocityInOut.Z = DstZ;
 	}
-}
-
-void WindFieldDiffusionPass::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData)
-{
-	FRDGBuilder GraphBuilder(RHICommandList);
-
-	FWindFieldRDGVelocity Velocity;
-	Velocity.X = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldSourceX"));
-	Velocity.Y = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldSourceY"));
-	Velocity.Z = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldSourceZ"));
-
-	FRDGTextureRef InX = Velocity.X;
-	FRDGTextureRef InY = Velocity.Y;
-	FRDGTextureRef InZ = Velocity.Z;
-
-	AddPass(GraphBuilder, SetupData, Velocity);
-
-	FRHICopyTextureInfo CopyInfo;
-	CopyInfo.Size = FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
-	AddCopyTexturePass(GraphBuilder, Velocity.X, InX, CopyInfo);
-	AddCopyTexturePass(GraphBuilder, Velocity.Y, InY, CopyInfo);
-	AddCopyTexturePass(GraphBuilder, Velocity.Z, InZ, CopyInfo);
-	GraphBuilder.Execute();
 }

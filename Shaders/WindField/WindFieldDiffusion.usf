@@ -5,75 +5,69 @@ Texture3D<float> WindFieldSourceZ;
 RWTexture3D<float> WindFieldDiffusionX;
 RWTexture3D<float> WindFieldDiffusionY;
 RWTexture3D<float> WindFieldDiffusionZ;
-float NumCells;
+float3 NumCells;
+float3 CellSize;
 float DeltaTime;
 float Diffusion;
 
+// One Jacobi sweep of implicit viscous diffusion.
+//
+// The implicit scheme  V = (V_self + a * sum(V_neighbours)) / (1 + 6a)   with  a = dt * nu / h^2
+// can be rewritten exactly as                V = lerp(V_self, mean(V_neighbours), 6a / (1 + 6a)).
+// The lerp form is used here because it makes the blend factor explicitly bounded to [0,1], which
+// is unconditionally stable, and because it lets Diffusion be authored as an intuitive
+// "fraction blended towards the neighbourhood per second" instead of a physical viscosity that
+// would need values in the hundreds of thousands to be visible at cm scale.
+//
+// Two bugs fixed here:
+//  * The old code passed SizeX*SizeY*SizeZ (16384) as "NumCells" into a = dt*Diffusion*NumCells,
+//    but Stam's formulation wants the per-axis resolution squared (N^2 = 1024) because a = dt*nu/h^2.
+//    That made 'a' ~546 at default settings, so (V + a*sum)/(1+6a) collapsed into a plain box blur
+//    and 10 iterations flattened the whole field into a constant.
+//  * Neighbour offsets were computed on uint3, where index 0 minus 1 wraps to 0xFFFFFFFF and
+//    survives max(0, x). Every sample on the x=0 / y=0 / z=0 faces therefore read out of bounds
+//    (returning 0) and dragged the borders towards zero.
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldDiffusionCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	float a = DeltaTime*Diffusion*NumCells;
-	float3 WindCellSize;
-	WindFieldSourceX.GetDimensions(WindCellSize.x,WindCellSize.y,WindCellSize.z);
-	WindCellSize -= 1;
-	
-	uint3 Pos = ThreadId;
-	float VX_Self = WindFieldSourceX[ThreadId];
-	float VY_Self = WindFieldSourceY[ThreadId];
-	float VZ_Self = WindFieldSourceZ[ThreadId];
-	
-	uint3 VX_RightPos = Pos;
-	VX_RightPos.x+=1;
-	VX_RightPos.x = min(VX_RightPos.x,WindCellSize.x);
-	float VX_Right = WindFieldSourceX[VX_RightPos];
-	float VY_Right = WindFieldSourceY[VX_RightPos];
-	float VZ_Right = WindFieldSourceZ[VX_RightPos];
+	int3 Pos = int3(ThreadId);
+	int3 MaxIdx = int3(NumCells) - 1;
 
-	uint3 VX_LeftPos = Pos;
-	VX_LeftPos.x-=1;
-	VX_LeftPos.x = max(0,VX_LeftPos.x);
-	float VX_Left =	WindFieldSourceX[VX_LeftPos];
-	float VY_Left = WindFieldSourceY[VX_LeftPos];
-	float VZ_Left = WindFieldSourceZ[VX_LeftPos];
+	// GroupCount rounds up, so the last group can contain threads past the texture bounds.
+	if (any(Pos > MaxIdx))
+	{
+		return;
+	}
 
-	uint3 VX_UpPos = Pos;
-	VX_UpPos.y+=1;
-	VX_UpPos.y = min(VX_UpPos.y,WindCellSize.y);
-	float VX_Up = WindFieldSourceX[VX_UpPos];
-	float VY_Up = WindFieldSourceY[VX_UpPos];
-	float VZ_Up = WindFieldSourceZ[VX_UpPos];
+	int3 PosRight = int3(min(Pos.x + 1, MaxIdx.x), Pos.y, Pos.z);
+	int3 PosLeft  = int3(max(Pos.x - 1, 0),        Pos.y, Pos.z);
+	int3 PosUp    = int3(Pos.x, min(Pos.y + 1, MaxIdx.y), Pos.z);
+	int3 PosDown  = int3(Pos.x, max(Pos.y - 1, 0),        Pos.z);
+	int3 PosFront = int3(Pos.x, Pos.y, min(Pos.z + 1, MaxIdx.z));
+	int3 PosBack  = int3(Pos.x, Pos.y, max(Pos.z - 1, 0));
 
-	uint3 VX_DownPos = Pos;
-	VX_DownPos.y-=1;
-	VX_DownPos.y = max(0,VX_DownPos.y);
-	float VX_Down = WindFieldSourceX[VX_DownPos];
-	float VY_Down = WindFieldSourceY[VX_DownPos];
-	float VZ_Down = WindFieldSourceZ[VX_DownPos];
+	float3 V_Self  = float3(WindFieldSourceX[Pos],      WindFieldSourceY[Pos],      WindFieldSourceZ[Pos]);
+	float3 V_Right = float3(WindFieldSourceX[PosRight], WindFieldSourceY[PosRight], WindFieldSourceZ[PosRight]);
+	float3 V_Left  = float3(WindFieldSourceX[PosLeft],  WindFieldSourceY[PosLeft],  WindFieldSourceZ[PosLeft]);
+	float3 V_Up    = float3(WindFieldSourceX[PosUp],    WindFieldSourceY[PosUp],    WindFieldSourceZ[PosUp]);
+	float3 V_Down  = float3(WindFieldSourceX[PosDown],  WindFieldSourceY[PosDown],  WindFieldSourceZ[PosDown]);
+	float3 V_Front = float3(WindFieldSourceX[PosFront], WindFieldSourceY[PosFront], WindFieldSourceZ[PosFront]);
+	float3 V_Back  = float3(WindFieldSourceX[PosBack],  WindFieldSourceY[PosBack],  WindFieldSourceZ[PosBack]);
 
-	uint3 VX_FrontPos = Pos;
-	VX_FrontPos.z+=1;
-	VX_FrontPos.z = min(VX_FrontPos.z,WindCellSize.z);
-	float VX_Front = WindFieldSourceX[VX_FrontPos];
-	float VY_Front = WindFieldSourceY[VX_FrontPos];
-	float VZ_Front = WindFieldSourceZ[VX_FrontPos];
+	// Per-axis 1/h^2 weights: on a non-cubic grid (e.g. 32x32x16) diffusion is anisotropic, so the
+	// axis with the larger cell size must contribute less. Weights are normalised to sum to 1.
+	float3 InvH2 = 1.0 / (CellSize * CellSize);
+	float SumW = 2.0 * (InvH2.x + InvH2.y + InvH2.z);
+	float3 W = InvH2 / max(SumW, 1e-8f);
 
-	uint3 VX_BackPos = Pos;
-	VX_BackPos.z-=1;
-	VX_BackPos.z = max(0,VX_BackPos.z);
-	float VX_Back = WindFieldSourceX[VX_BackPos];
-	float VY_Back = WindFieldSourceY[VX_BackPos];
-	float VZ_Back = WindFieldSourceZ[VX_BackPos];
+	float3 NeighbourMean = W.x * (V_Right + V_Left)
+	                     + W.y * (V_Up    + V_Down)
+	                     + W.z * (V_Front + V_Back);
 
-	float3 V_Self = float3(VX_Self,VY_Self,VZ_Self);
-	float3 V_Right = float3(VX_Right,VY_Right,VZ_Right);
-	float3 V_Left = float3(VX_Left,VY_Left,VZ_Left);
-	float3 V_Up = float3(VX_Up,VY_Up,VZ_Up);
-	float3 V_Down = float3(VX_Down,VY_Down,VZ_Down);
-	float3 V_Front = float3(VX_Front,VY_Front,VZ_Front);
-	float3 V_Back = float3(VX_Back,VY_Back,VZ_Back);
+	float Blend = saturate(Diffusion * DeltaTime);
+	float3 DiffusionResult = lerp(V_Self, NeighbourMean, Blend);
 
-	float3 DiffusionResult = (V_Self+a*(V_Right+V_Left+V_Up+V_Down+V_Front+V_Back))/(1+6*a);
-	WindFieldDiffusionX[ThreadId] = DiffusionResult.x;
-	WindFieldDiffusionY[ThreadId] = DiffusionResult.y;
-	WindFieldDiffusionZ[ThreadId] = DiffusionResult.z;
+	WindFieldDiffusionX[Pos] = DiffusionResult.x;
+	WindFieldDiffusionY[Pos] = DiffusionResult.y;
+	WindFieldDiffusionZ[Pos] = DiffusionResult.z;
 }

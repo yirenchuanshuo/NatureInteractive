@@ -20,6 +20,7 @@ UWindFieldComponent::UWindFieldComponent()
 	
 	// ...
 	Diffusion = 2;
+	DampingRate = 0.5f;
 	TexResolution = FIntVector(32,32,16);
 	WindFieldSize = FVector3f(3200,3200,1600);
 	DiffusionIterations = 10;
