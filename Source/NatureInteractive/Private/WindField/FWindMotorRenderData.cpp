@@ -63,3 +63,32 @@ void FWindMotorRenderDataManager::RemoveMotorData(const UWindMotorComponent* Win
 {
 	WindMotorRenderDatasMap.Remove(WindMotorComponent);
 }
+
+void FWindMotorRenderDataManager::QueueDurationReset(const FVector3f& Center, float Radius)
+{
+	// A zero/negative radius covers no cell; also rejects NaN since the comparison fails for it.
+	if (!(Radius > 0.0f))
+	{
+		return;
+	}
+
+	if (PendingDurationResets.Num() >= MaxPendingDurationResets)
+	{
+		if (!bWarnedDurationResetOverflow)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("FWindMotorRenderDataManager: more than %d wind duration reset requests pending; dropping the oldest. ")
+				TEXT("Is the wind field ticking?"), MaxPendingDurationResets);
+			bWarnedDurationResetOverflow = true;
+		}
+		PendingDurationResets.RemoveAt(0, 1, EAllowShrinking::No);
+	}
+
+	PendingDurationResets.Add(FVector4f(Center.X, Center.Y, Center.Z, Radius * Radius));
+}
+
+void FWindMotorRenderDataManager::ClearPendingDurationResets()
+{
+	PendingDurationResets.Reset();
+	bWarnedDurationResetOverflow = false;
+}

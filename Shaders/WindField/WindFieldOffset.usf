@@ -2,10 +2,12 @@
 Texture3D<float> WindFieldVelocityXInput;
 Texture3D<float> WindFieldVelocityYInput;
 Texture3D<float> WindFieldVelocityZInput;
+Texture3D<float> WindFieldDurationInput;
 
 RWTexture3D<float>WindFieldVelocityXOutput;
 RWTexture3D<float> WindFieldVelocityYOutput;
 RWTexture3D<float> WindFieldVelocityZOutput;
+RWTexture3D<float> WindFieldDurationOutput;
 
 // Whole-cell shift for this frame, already rounded on the CPU (the sub-cell remainder is carried
 // across frames there). Kept as float3 because shader parameters are float-typed.
@@ -37,4 +39,9 @@ void WindFieldOffsetCS(uint3 ThreadId : SV_DispatchThreadID)
 	WindFieldVelocityXOutput[pos] = bInside ? WindFieldVelocityXInput[FinalPos] : 0.0f;
 	WindFieldVelocityYOutput[pos] = bInside ? WindFieldVelocityYInput[FinalPos] : 0.0f;
 	WindFieldVelocityZOutput[pos] = bInside ? WindFieldVelocityZInput[FinalPos] : 0.0f;
+
+	// The duration accumulator is shifted by exactly the same amount as the velocity so the two stay
+	// aligned. Cells scrolled in from outside have no history, so they must read as "no wind yet"
+	// rather than inheriting the border value.
+	WindFieldDurationOutput[pos] = bInside ? WindFieldDurationInput[FinalPos] : 0.0f;
 }

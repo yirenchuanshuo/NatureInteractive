@@ -43,7 +43,7 @@ class FWindFieldComputeShader_DiffusionCS : public FGlobalShader
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_DiffusionCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldDiffusion.usf"), TEXT("WindFieldDiffusionCS"), SF_Compute);
 
 
-void WindFieldDiffusionPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData, FWindFieldRDGVelocity& VelocityInOut)
+void WindFieldDiffusionPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData, FWindFieldRDGChannels& ChannelsInOut)
 {
 	if (SetupData.DiffusionIterations <= 0)
 	{
@@ -58,7 +58,7 @@ void WindFieldDiffusionPass::AddPass(FRDGBuilder& GraphBuilder, const FWindField
 	TShaderMapRef<FWindFieldComputeShader_DiffusionCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
 	auto GroupCount = SetupData.GetGroupCount();
 
-	// Ping-pong between VelocityInOut (as source) and a freshly-allocated destination each iteration.
+	// Ping-pong between ChannelsInOut (as source) and a freshly-allocated destination each iteration.
 	for (int i = 0; i < SetupData.DiffusionIterations; ++i)
 	{
 		FRDGTextureRef DstX = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldDiffusionX"));
@@ -66,9 +66,9 @@ void WindFieldDiffusionPass::AddPass(FRDGBuilder& GraphBuilder, const FWindField
 		FRDGTextureRef DstZ = GraphBuilder.CreateTexture(Desc, TEXT("WindFieldDiffusionZ"));
 
 		FWindFieldComputeShader_DiffusionCS::FParameters* Params = GraphBuilder.AllocParameters<FWindFieldComputeShader_DiffusionCS::FParameters>();
-		Params->WindFieldSourceX = VelocityInOut.X;
-		Params->WindFieldSourceY = VelocityInOut.Y;
-		Params->WindFieldSourceZ = VelocityInOut.Z;
+		Params->WindFieldSourceX = ChannelsInOut.X;
+		Params->WindFieldSourceY = ChannelsInOut.Y;
+		Params->WindFieldSourceZ = ChannelsInOut.Z;
 		Params->WindFieldDiffusionX = GraphBuilder.CreateUAV(DstX);
 		Params->WindFieldDiffusionY = GraphBuilder.CreateUAV(DstY);
 		Params->WindFieldDiffusionZ = GraphBuilder.CreateUAV(DstZ);
@@ -80,14 +80,14 @@ void WindFieldDiffusionPass::AddPass(FRDGBuilder& GraphBuilder, const FWindField
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("WindFieldDiffusionComputeShader"),
 			Params,
-			ERDGPassFlags::AsyncCompute,
+			ERDGPassFlags::Compute,
 			[WindFieldComputeShader, Params, GroupCount](FRHIComputeCommandList& RHICmdList)
 			{
 				FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *Params, GroupCount);
 			});
 
-		VelocityInOut.X = DstX;
-		VelocityInOut.Y = DstY;
-		VelocityInOut.Z = DstZ;
+		ChannelsInOut.X = DstX;
+		ChannelsInOut.Y = DstY;
+		ChannelsInOut.Z = DstZ;
 	}
 }

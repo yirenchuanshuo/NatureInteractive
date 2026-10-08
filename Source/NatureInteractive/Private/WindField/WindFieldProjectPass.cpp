@@ -107,7 +107,7 @@ class FWindFieldComputeShader_ProjectThirdCS : public FGlobalShader
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_ProjectThirdCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldProjectContinue.usf"), TEXT("WindFieldProjectThirdCS"), SF_Compute);
 
 
-void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData, FWindFieldRDGVelocity& VelocityInOut)
+void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData, FWindFieldRDGChannels& ChannelsInOut)
 {
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
 			FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
@@ -125,9 +125,9 @@ void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRe
 	{
 		TShaderMapRef<FWindFieldComputeShader_ProjectFirstCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
 		FWindFieldComputeShader_ProjectFirstCS::FParameters* Params = GraphBuilder.AllocParameters<FWindFieldComputeShader_ProjectFirstCS::FParameters>();
-		Params->WindFieldVelocityXInput = VelocityInOut.X;
-		Params->WindFieldVelocityYInput = VelocityInOut.Y;
-		Params->WindFieldVelocityZInput = VelocityInOut.Z;
+		Params->WindFieldVelocityXInput = ChannelsInOut.X;
+		Params->WindFieldVelocityYInput = ChannelsInOut.Y;
+		Params->WindFieldVelocityZInput = ChannelsInOut.Z;
 		Params->WindFieldDivergenceOutput = GraphBuilder.CreateUAV(Divergence);
 		Params->WindFieldPressureOutput = GraphBuilder.CreateUAV(Pressure);
 		Params->NumCells = FVector3f(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
@@ -138,7 +138,7 @@ void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRe
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("WindFieldProjectFirstComputeShader"),
 			Params,
-			ERDGPassFlags::AsyncCompute,
+			ERDGPassFlags::Compute,
 			[WindFieldComputeShader, Params, GroupCount](FRHIComputeCommandList& RHICmdList)
 			{
 				FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *Params, GroupCount);
@@ -164,7 +164,7 @@ void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRe
 			GraphBuilder.AddPass(
 				RDG_EVENT_NAME("WindFieldProjectSecondComputeShader"),
 				Params,
-				ERDGPassFlags::AsyncCompute,
+				ERDGPassFlags::Compute,
 				[WindFieldComputeShader, Params, GroupCount](FRHIComputeCommandList& RHICmdList)
 				{
 					FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *Params, GroupCount);
@@ -183,9 +183,9 @@ void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRe
 	{
 		TShaderMapRef<FWindFieldComputeShader_ProjectThirdCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
 		FWindFieldComputeShader_ProjectThirdCS::FParameters* Params = GraphBuilder.AllocParameters<FWindFieldComputeShader_ProjectThirdCS::FParameters>();
-		Params->WindFieldVelocityXInput = VelocityInOut.X;
-		Params->WindFieldVelocityYInput = VelocityInOut.Y;
-		Params->WindFieldVelocityZInput = VelocityInOut.Z;
+		Params->WindFieldVelocityXInput = ChannelsInOut.X;
+		Params->WindFieldVelocityYInput = ChannelsInOut.Y;
+		Params->WindFieldVelocityZInput = ChannelsInOut.Z;
 		Params->WindFieldPressureInput = Pressure;
 		Params->WindFieldVelocityXOutput = GraphBuilder.CreateUAV(VelXOut);
 		Params->WindFieldVelocityYOutput = GraphBuilder.CreateUAV(VelYOut);
@@ -196,14 +196,14 @@ void WindFieldProjectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRe
 		GraphBuilder.AddPass(
 			RDG_EVENT_NAME("WindFieldProjectThirdComputeShader"),
 			Params,
-			ERDGPassFlags::AsyncCompute,
+			ERDGPassFlags::Compute,
 			[WindFieldComputeShader, Params, GroupCount](FRHIComputeCommandList& RHICmdList)
 			{
 				FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *Params, GroupCount);
 			});
 	}
 
-	VelocityInOut.X = VelXOut;
-	VelocityInOut.Y = VelYOut;
-	VelocityInOut.Z = VelZOut;
+	ChannelsInOut.X = VelXOut;
+	ChannelsInOut.Y = VelYOut;
+	ChannelsInOut.Z = VelZOut;
 }

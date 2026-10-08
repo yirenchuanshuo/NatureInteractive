@@ -43,7 +43,7 @@ class FWindFieldComputeShader_AdvectCS : public FGlobalShader
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_AdvectCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldAdvect.usf"), TEXT("WindFieldAdvectCS"), SF_Compute);
 
 
-void WindFieldAdvectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData, FWindFieldRDGVelocity& VelocityInOut)
+void WindFieldAdvectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData, FWindFieldRDGChannels& ChannelsInOut)
 {
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
 			FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
@@ -57,9 +57,9 @@ void WindFieldAdvectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRen
 	TShaderMapRef<FWindFieldComputeShader_AdvectCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
 	FWindFieldComputeShader_AdvectCS::FParameters* Params = GraphBuilder.AllocParameters<FWindFieldComputeShader_AdvectCS::FParameters>();
 
-	Params->WindFieldDiffusionX = VelocityInOut.X;
-	Params->WindFieldDiffusionY = VelocityInOut.Y;
-	Params->WindFieldDiffusionZ = VelocityInOut.Z;
+	Params->WindFieldDiffusionX = ChannelsInOut.X;
+	Params->WindFieldDiffusionY = ChannelsInOut.Y;
+	Params->WindFieldDiffusionZ = ChannelsInOut.Z;
 	Params->WindFieldAdvectX = GraphBuilder.CreateUAV(OutX);
 	Params->WindFieldAdvectY = GraphBuilder.CreateUAV(OutY);
 	Params->WindFieldAdvectZ = GraphBuilder.CreateUAV(OutZ);
@@ -72,13 +72,13 @@ void WindFieldAdvectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRen
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("WindFieldAdvectComputeShader"),
 		Params,
-		ERDGPassFlags::AsyncCompute,
+		ERDGPassFlags::Compute,
 		[WindFieldComputeShader, Params, GroupCount](FRHIComputeCommandList& RHICmdList)
 		{
 			FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *Params, GroupCount);
 		});
 
-	VelocityInOut.X = OutX;
-	VelocityInOut.Y = OutY;
-	VelocityInOut.Z = OutZ;
+	ChannelsInOut.X = OutX;
+	ChannelsInOut.Y = OutY;
+	ChannelsInOut.Z = OutZ;
 }

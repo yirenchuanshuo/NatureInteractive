@@ -2,7 +2,24 @@
 Texture3D<float> WindFieldVelocityXInput;
 Texture3D<float> WindFieldVelocityYInput;
 Texture3D<float> WindFieldVelocityZInput;
+Texture3D<float> WindFieldDurationInput;
+
 RWTexture3D<float4> WindFieldVelocityOutput;
+RWTexture3D<float> WindFieldDurationOutput;
+
+float DeltaTime;
+// Already squared on the CPU so the comparison below can use dot(V,V) directly.
+float SpeedThresholdSq;
+float DurationDecayRate;
+float MaxDuration;
+
+// One-shot duration reset requests (new wind source registered / Blueprint reset).
+// xyz = world-space sphere centre, w = radius squared. Already culled to the field bounds on the CPU.
+StructuredBuffer<float4> DurationResetSpheres;
+uint DurationResetNum;
+// Min corner of the field at its current position, and per-axis world size of a cell.
+float3 WindFieldMinCorner;
+float3 CellSize;
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldDataExportCS(uint3 ThreadId : SV_DispatchThreadID)
@@ -18,5 +35,32 @@ void WindFieldDataExportCS(uint3 ThreadId : SV_DispatchThreadID)
 	float X = WindFieldVelocityXInput[ThreadId];
 	float Y = WindFieldVelocityYInput[ThreadId];
 	float Z = WindFieldVelocityZInput[ThreadId];
-	WindFieldVelocityOutput[ThreadId.xyz] = float4(X,Y,Z,1);
+	float3 V = float3(X, Y, Z);
+
+	float PrevDuration = WindFieldDurationInput[ThreadId];
+
+	// Accumulate real time while the wind is above the threshold, otherwise fade back towards zero.
+	// A linear fade rather than an instant reset: a cell hovering around the threshold would make
+	// the alpha channel flicker frame to frame and produce visible jitter on the driven foliage.
+	float NewDuration = (dot(V, V) > SpeedThresholdSq)
+		? min(PrevDuration + DeltaTime, MaxDuration)
+		: max(PrevDuration - DurationDecayRate * DeltaTime, 0.0f);
+
+	// Applied after accumulation so a reset cell reads exactly 0 this frame (both in the alpha
+	// channel and in the persisted accumulator) instead of 0 + DeltaTime.
+	// Cell centre uses the same convention as AddSource: (index + 0.5) * CellSize + MinCorner.
+	float3 CellCentre = (float3(ThreadId) + 0.5f) * CellSize + WindFieldMinCorner;
+	for (uint i = 0; i < DurationResetNum; ++i)
+	{
+		float4 Sphere = DurationResetSpheres[i];
+		float3 D = CellCentre - Sphere.xyz;
+		if (dot(D, D) <= Sphere.w)
+		{
+			NewDuration = 0.0f;
+			break;
+		}
+	}
+
+	WindFieldDurationOutput[ThreadId] = NewDuration;
+	WindFieldVelocityOutput[ThreadId] = float4(V, NewDuration);
 }

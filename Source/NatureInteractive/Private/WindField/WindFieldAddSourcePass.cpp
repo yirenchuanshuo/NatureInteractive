@@ -46,7 +46,7 @@ IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_AddSourceCS, TEXT("/Plugin/Nature
 
 void WindFieldAddSourcePass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData,
                                      const TArray<FWindMotorRenderData>& WindMotorRenderDatas,
-                                     FWindFieldRDGVelocity& VelocityInOut)
+                                     FWindFieldRDGChannels& ChannelsInOut)
 {
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
 			FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
@@ -67,9 +67,9 @@ void WindFieldAddSourcePass::AddPass(FRDGBuilder& GraphBuilder, const FWindField
 	TShaderMapRef<FWindFieldComputeShader_AddSourceCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
 	FWindFieldComputeShader_AddSourceCS::FParameters* Params = GraphBuilder.AllocParameters<FWindFieldComputeShader_AddSourceCS::FParameters>();
 
-	Params->WindFieldSourceXPrevious = VelocityInOut.X;
-	Params->WindFieldSourceYPrevious = VelocityInOut.Y;
-	Params->WindFieldSourceZPrevious = VelocityInOut.Z;
+	Params->WindFieldSourceXPrevious = ChannelsInOut.X;
+	Params->WindFieldSourceYPrevious = ChannelsInOut.Y;
+	Params->WindFieldSourceZPrevious = ChannelsInOut.Z;
 	Params->WindFieldSourceXOutput = GraphBuilder.CreateUAV(OutX);
 	Params->WindFieldSourceYOutput = GraphBuilder.CreateUAV(OutY);
 	Params->WindFieldSourceZOutput = GraphBuilder.CreateUAV(OutZ);
@@ -83,15 +83,15 @@ void WindFieldAddSourcePass::AddPass(FRDGBuilder& GraphBuilder, const FWindField
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("WindFieldAddSourceComputeShader"),
 		Params,
-		ERDGPassFlags::AsyncCompute,
+		ERDGPassFlags::Compute,
 		[WindFieldComputeShader, Params, GroupCount](FRHIComputeCommandList& RHICmdList)
 		{
 			FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *Params, GroupCount);
 		});
 
-	VelocityInOut.X = OutX;
-	VelocityInOut.Y = OutY;
-	VelocityInOut.Z = OutZ;
+	ChannelsInOut.X = OutX;
+	ChannelsInOut.Y = OutY;
+	ChannelsInOut.Z = OutZ;
 }
 
 FRDGBufferRef WindFieldAddSourcePass::CreateWindMotorBuffer(FRDGBuilder& GraphBuilder,const int32 WindMotroNum)

@@ -40,6 +40,27 @@ public:
 
 	void RemoveMotorData(const UWindMotorComponent* WindMotorComponent);
 
+	// --- One-shot wind duration reset requests ---
+	// Consumed by the next WindFieldRender::Render() snapshot and then cleared by AWindField::Tick,
+	// so each request affects exactly one frame.
+
+	// Upper bound so the queue cannot grow without limit while the field is not ticking (e.g. the
+	// render data failed to initialise and the actor disabled its tick).
+	static constexpr int32 MaxPendingDurationResets = 64;
+
+	// Queues a sphere whose cells get their wind duration forced to zero. Non-positive radii are
+	// ignored. When the queue is full the oldest request is dropped.
+	void QueueDurationReset(const FVector3f& Center, float Radius);
+	void ClearPendingDurationResets();
+
 	float UintSize = 100;
 	TMap<UWindMotorComponent*,FWindMotorRenderData> WindMotorRenderDatasMap;
+
+	// xyz = world-space sphere centre, w = radius squared (pre-squared for the shader).
+	// float4 is naturally 16-byte aligned, so the C++ and HLSL layouts are identical.
+	TArray<FVector4f> PendingDurationResets;
+
+private:
+	// Only warn once per overflow episode; re-armed when the queue is drained.
+	bool bWarnedDurationResetOverflow = false;
 };

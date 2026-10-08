@@ -20,8 +20,11 @@ public:
 	// render thread; nothing here may hold a reference to game-thread-owned state.
 	void Render(const FWindFieldRenderData& RenderData, const FWindMotorRenderDataManager& WindMotorRenderDataManager) const;
 
+	// DurationResetSpheres: xyz = world-space centre, w = radius squared. Already culled against the
+	// field bounds; usually empty.
 	void Draw(FRHICommandListImmediate& RHICommandList, const FWindFieldRenderData& RenderData,
-		const TArray<FWindMotorRenderData>& WindMotorRenderDatas) const;
+		const TArray<FWindMotorRenderData>& WindMotorRenderDatas,
+		const TArray<FVector4f>& DurationResetSpheres) const;
 
 	TPimplPtr<WindFieldOffsetPass> OffsetPass;
 	TPimplPtr<WindFieldAddSourcePass> AddSourcePass;

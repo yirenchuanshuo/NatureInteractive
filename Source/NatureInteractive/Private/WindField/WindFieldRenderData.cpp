@@ -47,12 +47,25 @@ void FWindFieldRenderData::InitData(const UWindFieldComponent& WindFieldComponen
 	SizeY = WindFieldComponent.TexResolution.Y;
 	SizeZ = WindFieldComponent.TexResolution.Z;
 	OutputUAVFormat = PF_A32B32G32R32F;
-	FeatureLevel = WindFieldComponent.GetWorld()->GetFeatureLevel();
-	
-	WindFieldChannel_R1= WindFieldComponent.WindFieldChannel_R1->GameThread_GetRenderTargetResource();
-	WindFieldChannel_G1 = WindFieldComponent.WindFieldChannel_G1->GameThread_GetRenderTargetResource();
-	WindFieldChannel_B1 = WindFieldComponent.WindFieldChannel_B1->GameThread_GetRenderTargetResource();
-	WindFieldVelocityOut = WindFieldComponent.WindFieldVelocity->GameThread_GetRenderTargetResource();
+
+	if (const UWorld* World = WindFieldComponent.GetWorld())
+	{
+		FeatureLevel = World->GetFeatureLevel();
+	}
+
+	// Callers are expected to have validated these, but GameThread_GetRenderTargetResource() can
+	// still return null if the resource has not been created yet, and the render thread would
+	// dereference it later with no context about where it came from.
+	WindFieldChannel_R1 = WindFieldComponent.WindFieldChannel_R1
+		? WindFieldComponent.WindFieldChannel_R1->GameThread_GetRenderTargetResource() : nullptr;
+	WindFieldChannel_G1 = WindFieldComponent.WindFieldChannel_G1
+		? WindFieldComponent.WindFieldChannel_G1->GameThread_GetRenderTargetResource() : nullptr;
+	WindFieldChannel_B1 = WindFieldComponent.WindFieldChannel_B1
+		? WindFieldComponent.WindFieldChannel_B1->GameThread_GetRenderTargetResource() : nullptr;
+	WindFieldChannel_A1 = WindFieldComponent.WindFieldChannel_A1
+		? WindFieldComponent.WindFieldChannel_A1->GameThread_GetRenderTargetResource() : nullptr;
+	WindFieldVelocityOut = WindFieldComponent.WindFieldVelocity
+		? WindFieldComponent.WindFieldVelocity->GameThread_GetRenderTargetResource() : nullptr;
 
 	WindFieldSize = WindFieldComponent.WindFieldSize;
 	// Per-axis cell size, the single source of truth for cm/s <-> cell conversions.
@@ -71,6 +84,11 @@ void FWindFieldRenderData::InitData(const UWindFieldComponent& WindFieldComponen
 	DampingRate = WindFieldComponent.DampingRate;
 	DiffusionIterations = WindFieldComponent.DiffusionIterations;
 	ProjectionPressureIterations = WindFieldComponent.ProjectionPressureIterations;
+
+	// Pre-squared so the shader can compare against dot(V,V) without a sqrt per cell.
+	DurationSpeedThresholdSq = FMath::Square(FMath::Max(WindFieldComponent.DurationSpeedThreshold, 0.0f));
+	DurationDecayRate = FMath::Max(WindFieldComponent.DurationDecayRate, 0.0f);
+	MaxDuration = FMath::Max(WindFieldComponent.MaxDuration, KINDA_SMALL_NUMBER);
 	
 	WindFieldWorldPosition = FVector3f(WindFieldComponent.GetComponentLocation());
 	WindFieldPreviousWorldPosition = WindFieldWorldPosition;
