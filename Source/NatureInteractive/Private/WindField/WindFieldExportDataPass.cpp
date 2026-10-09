@@ -22,6 +22,8 @@ class FWindFieldComputeShader_DataExportCS : public FGlobalShader
 		SHADER_PARAMETER(float,MaxDuration)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<float4>, DurationResetSpheres)
 		SHADER_PARAMETER(uint32,DurationResetNum)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FMotorEntryData>, MotorEntries)
+		SHADER_PARAMETER(uint32,MotorEntryNum)
 		SHADER_PARAMETER(FVector3f,WindFieldMinCorner)
 		SHADER_PARAMETER(FVector3f,CellSize)
 	END_SHADER_PARAMETER_STRUCT()
@@ -52,26 +54,40 @@ WindFieldExportDataPass::WindFieldExportDataPass()
 {
 }
 
-void WindFieldExportDataPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData,
-	const TArray<FVector4f>& DurationResetSpheres, FWindFieldRDGChannels& ChannelsInOut)
+namespace
 {
-	// One-shot duration reset spheres. A structured buffer cannot be empty, so allocate at least one
-	// element; the shader loop is bounded by DurationResetNum and never reads the placeholder.
-	const int32 DurationResetNum = DurationResetSpheres.Num();
-	FRDGBufferRef DurationResetBuffer = GraphBuilder.CreateBuffer(
-		FRDGBufferDesc::CreateStructuredDesc(sizeof(FVector4f), FMath::Max(DurationResetNum, 1)),
-		TEXT("WindFieldDurationResetSpheres"));
-	if (DurationResetNum > 0)
+	// Uploads Elements into a new structured buffer. A structured buffer cannot be empty, so an empty
+	// array still gets one zeroed placeholder element; it must be initialised before being bound as
+	// an SRV or RDG validation complains. Shader loops are bounded by the element count, so the
+	// placeholder is never read.
+	template <typename ElementType>
+	FRDGBufferRef CreateUploadedStructuredBuffer(FRDGBuilder& GraphBuilder, const TArray<ElementType>& Elements, const TCHAR* Name)
 	{
-		GraphBuilder.QueueBufferUpload(DurationResetBuffer, DurationResetSpheres.GetData(),
-			sizeof(FVector4f) * DurationResetNum, ERDGInitialDataFlags::None);
+		const int32 Num = Elements.Num();
+		FRDGBufferRef Buffer = GraphBuilder.CreateBuffer(
+			FRDGBufferDesc::CreateStructuredDesc(sizeof(ElementType), FMath::Max(Num, 1)), Name);
+
+		if (Num > 0)
+		{
+			GraphBuilder.QueueBufferUpload(Buffer, Elements.GetData(), sizeof(ElementType) * Num, ERDGInitialDataFlags::None);
+		}
+		else
+		{
+			// ERDGInitialDataFlags::None copies the data, so a stack placeholder is safe.
+			const ElementType Placeholder{};
+			GraphBuilder.QueueBufferUpload(Buffer, &Placeholder, sizeof(ElementType), ERDGInitialDataFlags::None);
+		}
+		return Buffer;
 	}
-	else
-	{
-		// Still has to be initialised before it is bound as an SRV, or RDG validation complains.
-		const FVector4f Placeholder(0.0f, 0.0f, 0.0f, -1.0f);
-		GraphBuilder.QueueBufferUpload(DurationResetBuffer, &Placeholder, sizeof(FVector4f), ERDGInitialDataFlags::None);
-	}
+}
+
+void WindFieldExportDataPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData,
+	const FWindFieldDurationResetInputs& DurationResetInputs, FWindFieldRDGChannels& ChannelsInOut)
+{
+	const int32 DurationResetNum = DurationResetInputs.Spheres.Num();
+	const int32 MotorEntryNum = DurationResetInputs.MotorEntries.Num();
+	FRDGBufferRef DurationResetBuffer = CreateUploadedStructuredBuffer(GraphBuilder, DurationResetInputs.Spheres, TEXT("WindFieldDurationResetSpheres"));
+	FRDGBufferRef MotorEntryBuffer = CreateUploadedStructuredBuffer(GraphBuilder, DurationResetInputs.MotorEntries, TEXT("WindFieldMotorEntries"));
 
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
 			FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
@@ -105,6 +121,8 @@ void WindFieldExportDataPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFiel
 	Params->MaxDuration = SetupData.MaxDuration;
 	Params->DurationResetSpheres = GraphBuilder.CreateSRV(DurationResetBuffer);
 	Params->DurationResetNum = static_cast<uint32>(DurationResetNum);
+	Params->MotorEntries = GraphBuilder.CreateSRV(MotorEntryBuffer);
+	Params->MotorEntryNum = static_cast<uint32>(MotorEntryNum);
 	// Same reference frame as AddSource: min corner of the field at its current (post-offset) position.
 	Params->WindFieldMinCorner = SetupData.WindFieldWorldPosition - SetupData.WindFieldSize * 0.5f;
 	Params->CellSize = SetupData.CellSize;

@@ -15,9 +15,11 @@ public:
 	// The updated accumulator is handed back through ChannelsInOut.Duration so the caller can persist
 	// it into the WindFieldChannel_A1 render target that feeds the next frame.
 	//
-	// DurationResetSpheres (xyz = world-space centre, w = radius squared) are one-shot reset requests:
-	// any cell whose centre falls inside one has its duration forced to 0 this frame, after the
-	// accumulation step, so both the alpha channel and the persisted accumulator read exactly 0.
+	// DurationResetInputs force cells back to a duration of 0 this frame, applied after the
+	// accumulation step so both the alpha channel and the persisted accumulator read exactly 0:
+	//  - Spheres: one-shot requests; any cell whose centre is inside one is reset.
+	//  - MotorEntries: moving motors; a cell is reset when it is inside the motor's sphere this
+	//    frame but was outside it last frame (the sphere has just entered the cell).
 	void AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData,
-		const TArray<FVector4f>& DurationResetSpheres, FWindFieldRDGChannels& ChannelsInOut);
+		const FWindFieldDurationResetInputs& DurationResetInputs, FWindFieldRDGChannels& ChannelsInOut);
 };

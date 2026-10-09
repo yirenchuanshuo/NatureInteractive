@@ -17,6 +17,19 @@ float MaxDuration;
 // xyz = world-space sphere centre, w = radius squared. Already culled to the field bounds on the CPU.
 StructuredBuffer<float4> DurationResetSpheres;
 uint DurationResetNum;
+
+// Motors that moved this frame (stationary ones are filtered out on the CPU).
+// Must stay in sync with FWindMotorEntryData (WindFieldRenderData.h): 32-byte stride, each float3
+// starting on a 16-byte boundary.
+struct FMotorEntryData
+{
+	float3 WorldPosition;
+	float  RadiusSq;
+	float3 PreviousWorldPosition;
+	float  Padding;
+};
+StructuredBuffer<FMotorEntryData> MotorEntries;
+uint MotorEntryNum;
 // Min corner of the field at its current position, and per-axis world size of a cell.
 float3 WindFieldMinCorner;
 float3 CellSize;
@@ -50,15 +63,30 @@ void WindFieldDataExportCS(uint3 ThreadId : SV_DispatchThreadID)
 	// channel and in the persisted accumulator) instead of 0 + DeltaTime.
 	// Cell centre uses the same convention as AddSource: (index + 0.5) * CellSize + MinCorner.
 	float3 CellCentre = (float3(ThreadId) + 0.5f) * CellSize + WindFieldMinCorner;
-	for (uint i = 0; i < DurationResetNum; ++i)
+	bool bReset = false;
+
+	// One-shot requests: reset everything inside the sphere.
+	for (uint i = 0; i < DurationResetNum && !bReset; ++i)
 	{
 		float4 Sphere = DurationResetSpheres[i];
 		float3 D = CellCentre - Sphere.xyz;
-		if (dot(D, D) <= Sphere.w)
-		{
-			NewDuration = 0.0f;
-			break;
-		}
+		bReset = dot(D, D) <= Sphere.w;
+	}
+
+	// Entry detection: the motor's sphere covers this cell now but did not last frame, i.e. a wind
+	// source has just moved into it. Cells that stay inside the sphere are not reset again, so they
+	// keep accumulating normally. Both tests use the current radius.
+	for (uint j = 0; j < MotorEntryNum && !bReset; ++j)
+	{
+		FMotorEntryData Entry = MotorEntries[j];
+		float3 DNow  = CellCentre - Entry.WorldPosition;
+		float3 DPrev = CellCentre - Entry.PreviousWorldPosition;
+		bReset = dot(DNow, DNow) <= Entry.RadiusSq && dot(DPrev, DPrev) > Entry.RadiusSq;
+	}
+
+	if (bReset)
+	{
+		NewDuration = 0.0f;
 	}
 
 	WindFieldDurationOutput[ThreadId] = NewDuration;

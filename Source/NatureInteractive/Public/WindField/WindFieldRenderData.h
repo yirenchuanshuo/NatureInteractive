@@ -25,6 +25,30 @@ struct FWindFieldRDGChannels
 	FRDGTextureRef Duration = nullptr;
 };
 
+// A motor that moved this frame, used to detect cells its sphere has just entered.
+// Mirrors FMotorEntryData in WindFieldDataExport.usf. Each float3 starts on a 16-byte boundary so
+// the HLSL packing rules give the same 32-byte stride as C++.
+struct FWindMotorEntryData
+{
+	FVector3f WorldPosition = FVector3f::ZeroVector;          // offset  0
+	float     RadiusSq = 0.0f;                                // offset 12
+	FVector3f PreviousWorldPosition = FVector3f::ZeroVector;  // offset 16
+	float     Padding = 0.0f;                                 // offset 28 -> stride 32
+};
+
+static_assert(sizeof(FWindMotorEntryData) == 32,
+	"FWindMotorEntryData must stay 32 bytes to match the HLSL FMotorEntryData stride.");
+
+// Per-frame inputs that force a cell's wind duration back to 0. Built on the game thread by
+// WindFieldRender::Render (already culled against the field bounds) and consumed by ExportData.
+struct FWindFieldDurationResetInputs
+{
+	// One-shot spheres: new motor registered / Blueprint reset. xyz = centre, w = radius squared.
+	TArray<FVector4f> Spheres;
+	// Motors that moved this frame: cells inside the sphere now but not last frame are reset.
+	TArray<FWindMotorEntryData> MotorEntries;
+};
+
 class FWindFieldRenderData
 {
 public:

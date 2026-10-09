@@ -1,6 +1,7 @@
 #include "WindField/WindFieldRender.h"
 #include "WindField/FWindMotorRenderData.h"
 #include "WindField/WindFieldRenderData.h"
+#include "WindField/WindMotorComponent.h"
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 
@@ -30,51 +31,89 @@ void WindFieldRender::Render(const FWindFieldRenderData& RenderData,const FWindM
 	TArray<FWindMotorRenderData> WindMotorRenderDatas;
 	WindMotorRenderDataManager.WindMotorRenderDatasMap.GenerateValueArray(WindMotorRenderDatas);
 
-	// Snapshot the one-shot duration reset requests, discarding any sphere that does not touch the
-	// field's current bounds so far-away requests never reach the GPU. A sphere/box test (closest
-	// point on the box) rather than "centre inside box", so a motor just outside the edge still
-	// resets the border cells its radius reaches.
-	TArray<FVector4f> DurationResetSpheres;
+	// Everything that can force a cell's duration back to 0 this frame. Both lists are culled against
+	// the field's current bounds so out-of-range requests never reach the GPU. The test is
+	// sphere/box (closest point on the box) rather than "centre inside box", so a sphere whose centre
+	// is just outside the edge still reaches the border cells it overlaps.
+	const FVector3f HalfSize = RenderData.WindFieldSize * 0.5f;
+	const FVector3f BoxMin = RenderData.WindFieldWorldPosition - HalfSize;
+	const FVector3f BoxMax = RenderData.WindFieldWorldPosition + HalfSize;
+	auto SphereTouchesField = [&BoxMin, &BoxMax](const FVector3f& Centre, float RadiusSq)
+	{
+		const FVector3f Closest(
+			FMath::Clamp(Centre.X, BoxMin.X, BoxMax.X),
+			FMath::Clamp(Centre.Y, BoxMin.Y, BoxMax.Y),
+			FMath::Clamp(Centre.Z, BoxMin.Z, BoxMax.Z));
+		return FVector3f::DistSquared(Centre, Closest) <= RadiusSq;
+	};
+
+	FWindFieldDurationResetInputs DurationResetInputs;
+
+	// 1) One-shot requests (motor registered / Blueprint reset).
 	if (WindMotorRenderDataManager.PendingDurationResets.Num() > 0)
 	{
-		const FVector3f HalfSize = RenderData.WindFieldSize * 0.5f;
-		const FVector3f BoxMin = RenderData.WindFieldWorldPosition - HalfSize;
-		const FVector3f BoxMax = RenderData.WindFieldWorldPosition + HalfSize;
-
-		DurationResetSpheres.Reserve(WindMotorRenderDataManager.PendingDurationResets.Num());
+		DurationResetInputs.Spheres.Reserve(WindMotorRenderDataManager.PendingDurationResets.Num());
 		for (const FVector4f& Sphere : WindMotorRenderDataManager.PendingDurationResets)
 		{
-			const FVector3f Centre(Sphere.X, Sphere.Y, Sphere.Z);
-			const FVector3f Closest(
-				FMath::Clamp(Centre.X, BoxMin.X, BoxMax.X),
-				FMath::Clamp(Centre.Y, BoxMin.Y, BoxMax.Y),
-				FMath::Clamp(Centre.Z, BoxMin.Z, BoxMax.Z));
-			if (FVector3f::DistSquared(Centre, Closest) <= Sphere.W)
+			if (SphereTouchesField(FVector3f(Sphere.X, Sphere.Y, Sphere.Z), Sphere.W))
 			{
-				DurationResetSpheres.Add(Sphere);
+				DurationResetInputs.Spheres.Add(Sphere);
 			}
 		}
+	}
+
+	// 2) Moving motors: the shader resets cells that are inside the sphere now but were not last
+	// frame. A motor that did not move cannot produce such a cell, so stationary motors are skipped
+	// here and cost nothing on the GPU. Only the current sphere needs to touch the field, since the
+	// cells being entered are by definition inside it.
+	// SetTickData has already refreshed WorldPosition and UpdatePreviousData has not run yet, so the
+	// pair below is exactly "last frame -> this frame".
+	for (const TPair<UWindMotorComponent*, FWindMotorRenderData>& MotorPair : WindMotorRenderDataManager.WindMotorRenderDatasMap)
+	{
+		const UWindMotorComponent* MotorComponent = MotorPair.Key;
+		if (!IsValid(MotorComponent) || !MotorComponent->bResetDurationOnEnter)
+		{
+			continue;
+		}
+
+		const FWindMotorRenderData& Motor = MotorPair.Value;
+		if (!(Motor.Radius > 0.0f)
+			|| FVector3f::DistSquared(Motor.WorldPosition, Motor.PreviousWorldPosition) <= KINDA_SMALL_NUMBER)
+		{
+			continue;
+		}
+
+		const float RadiusSq = Motor.Radius * Motor.Radius;
+		if (!SphereTouchesField(Motor.WorldPosition, RadiusSq))
+		{
+			continue;
+		}
+
+		FWindMotorEntryData& Entry = DurationResetInputs.MotorEntries.AddDefaulted_GetRef();
+		Entry.WorldPosition = Motor.WorldPosition;
+		Entry.RadiusSq = RadiusSq;
+		Entry.PreviousWorldPosition = Motor.PreviousWorldPosition;
 	}
 
 	if(IsInRenderingThread())
 	{
 		FRHICommandListImmediate& RHICmdList = GetImmediateCommandList_ForRenderCommand();
-		Draw(RHICmdList,RenderDataCopy,WindMotorRenderDatas,DurationResetSpheres);
+		Draw(RHICmdList,RenderDataCopy,WindMotorRenderDatas,DurationResetInputs);
 	}
 	else
 	{
 		ENQUEUE_RENDER_COMMAND(WindFieldRenderCommand)(
 		[this, RenderDataCopy = MoveTemp(RenderDataCopy), WindMotorRenderDatas = MoveTemp(WindMotorRenderDatas),
-			DurationResetSpheres = MoveTemp(DurationResetSpheres)]
+			DurationResetInputs = MoveTemp(DurationResetInputs)]
 		(FRHICommandListImmediate& RHICmdList)
 		{
-			Draw(RHICmdList,RenderDataCopy,WindMotorRenderDatas,DurationResetSpheres);
+			Draw(RHICmdList,RenderDataCopy,WindMotorRenderDatas,DurationResetInputs);
 		});
 	}
 }
 
 void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData,
-	const TArray<FWindMotorRenderData>& WindMotorRenderDatas,const TArray<FVector4f>& DurationResetSpheres)const
+	const TArray<FWindMotorRenderData>& WindMotorRenderDatas,const FWindFieldDurationResetInputs& DurationResetInputs)const
 {
 	// One FRDGBuilder for the whole wind-field frame; a single Execute() at the end lets RDG
 	// schedule all barriers together.
@@ -123,7 +162,7 @@ void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const FWindF
 	DiffusionPass->AddPass(GraphBuilder, RenderData, Channels);
 	AdvectPass->AddPass(GraphBuilder, RenderData, Channels);
 	ProjectPass->AddPass(GraphBuilder, RenderData, Channels);
-	ExportDataPass->AddPass(GraphBuilder, RenderData, DurationResetSpheres, Channels);
+	ExportDataPass->AddPass(GraphBuilder, RenderData, DurationResetInputs, Channels);
 
 	// Persist the final velocity back to WindFieldChannel_R1/G1/B1 and the updated accumulator back
 	// to WindFieldChannel_A1 for the next frame's input.

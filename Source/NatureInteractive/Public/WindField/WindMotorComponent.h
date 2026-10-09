@@ -57,6 +57,12 @@ public:
 	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "WindMotor")
 	bool bResetDurationOnRegister = true;
 
+	// While this motor moves, zero the wind duration of every cell its Radius sphere newly covers
+	// (inside this frame, outside last frame), so foliage ahead of a moving source ramps up from
+	// scratch. Cells already inside the sphere keep accumulating. Has no cost while stationary.
+	UPROPERTY(EditAnywhere,BlueprintReadWrite,Category = "WindMotor")
+	bool bResetDurationOnEnter = true;
+
 	// Zeroes the accumulated wind duration within Radius of this motor's current location on the
 	// next wind field update (e.g. when a sprint starts or a skill is cast). Does nothing if the
 	// motor is not registered with a wind field.
