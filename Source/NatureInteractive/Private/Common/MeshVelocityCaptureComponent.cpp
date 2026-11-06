@@ -152,6 +152,13 @@ bool UMeshVelocityCaptureComponent::CollectContactBodies(const TArray<UMeshCompo
 		ContactBody.LinearVelocity = FVector2f(LinearVelocity.X,LinearVelocity.Y) * FMeshVelocityRenderData::VelocityScale;
 		ContactBody.Pad = FVector2f(BodyForce, 0.f);
 		
+		const FVector2f HorizontalVelocity(LinearVelocity.X, LinearVelocity.Y);
+		if (HorizontalVelocity.SizeSquared() > FMath::Square(FMath::Max(MoveDirMinSpeed, KINDA_SMALL_NUMBER)))
+		{
+			Record.LastMoveDir = HorizontalVelocity.GetSafeNormal();
+		}
+		ContactBody.MoveDir = Record.LastMoveDir;
+		
 		
 		VelocityRenderData.ContactBodies.Add(ContactBody);
 		

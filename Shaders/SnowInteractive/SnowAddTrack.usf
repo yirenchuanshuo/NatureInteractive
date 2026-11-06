@@ -64,8 +64,9 @@ void SnowAddVelocityTrackCS(uint3 ThreadId : SV_DispatchThreadID)
 	SnowVelocityTrackOutput[Pos] = float4(V,0,1);
 }
 
-// SnowVelocityInput: xy = 速度, z = 压入力度, w = 是否命中接触体
-// 输出: xy = 轨迹速度, z = 轨迹强度, w = 写入计时(写入时为 1，按 Lifetime 线性衰减到 0)
+// SnowVelocityInput: xy = 速度, z = 压入力度, w = 未命中 0 / 命中 1 + 横向位置(0~1)
+// 输出: xy = 轨迹速度, z = 横向位置(中线 0.5，运动方向两侧分别趋向 0 / 1，写入后保持不衰减),
+//       w = 写入计时(写入时为 1，按 Lifetime 线性衰减到 0)
 //
 // 膨胀采用可分离的两遍(横向 -> 纵向)：权重为高斯 g(d) = exp(-DilateFalloff * d²)，
 // g(dx)·g(dy) = g(r) 各向同性，因此加权和与加权最大值都可以精确拆成两个一维过程，
@@ -85,10 +86,10 @@ float DilateWeight(int D)
 }
 
 //------------------------------------------------------------------------------
-// 横向：A = (Σ速度·权重, Σ权重, max 权重)，B = 满足计时条件的 max 权重
+// 横向：A = (Σ速度·权重, Σ权重, max 权重)，B = (满足计时条件的 max 权重, Σ横向位置·权重)
 //------------------------------------------------------------------------------
 RWTexture2D<float4> DilateHOutputA;
-RWTexture2D<float> DilateHOutputB;
+RWTexture2D<float2> DilateHOutputB;
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void SnowDilateVelocityTrackHCS(uint3 ThreadId : SV_DispatchThreadID)
@@ -105,6 +106,7 @@ void SnowDilateVelocityTrackHCS(uint3 ThreadId : SV_DispatchThreadID)
 	float SumW = 0;
 	float MaxW = 0;
 	float MaxTimerW = 0;
+	float SumSide = 0;
 
 	[loop]
 	for (int x = -DilateRadius; x <= DilateRadius; ++x)
@@ -125,6 +127,7 @@ void SnowDilateVelocityTrackHCS(uint3 ThreadId : SV_DispatchThreadID)
 		float W = Contact * DilateWeight(x);
 		SumV += In.xy * W;
 		SumW += W;
+		SumSide += saturate(In.w - 1.0) * W;
 		MaxW = max(MaxW, W);
 		if (length(In.xy) >= TimerMinSpeed)
 		{
@@ -133,14 +136,14 @@ void SnowDilateVelocityTrackHCS(uint3 ThreadId : SV_DispatchThreadID)
 	}
 
 	DilateHOutputA[Pos] = float4(SumV, SumW, MaxW);
-	DilateHOutputB[Pos] = MaxTimerW;
+	DilateHOutputB[Pos] = float2(MaxTimerW, SumSide);
 }
 
 //------------------------------------------------------------------------------
 // 纵向 + 累积
 //------------------------------------------------------------------------------
 Texture2D<float4> DilateHInputA;
-Texture2D<float> DilateHInputB;
+Texture2D<float2> DilateHInputB;
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void SnowAccumulateVelocityTrackCS(uint3 ThreadId : SV_DispatchThreadID)
@@ -157,6 +160,7 @@ void SnowAccumulateVelocityTrackCS(uint3 ThreadId : SV_DispatchThreadID)
 	float SumW = 0;
 	float MaxW = 0;
 	float MaxTimerW = 0;
+	float SumSide = 0;
 
 	[loop]
 	for (int y = -DilateRadius; y <= DilateRadius; ++y)
@@ -173,26 +177,30 @@ void SnowAccumulateVelocityTrackCS(uint3 ThreadId : SV_DispatchThreadID)
 			continue;
 		}
 
+		float2 HB = DilateHInputB[int2(Pos.x, SampleY)];
 		float G = DilateWeight(y);
 		SumV += H.xy * G;
 		SumW += H.z * G;
+		SumSide += HB.y * G;
 		MaxW = max(MaxW, H.w * G);
-		MaxTimerW = max(MaxTimerW, DilateHInputB[int2(Pos.x, SampleY)] * G);
+		MaxTimerW = max(MaxTimerW, HB.x * G);
 	}
 
 	float2 NewV = SumW > 1e-5 ? SumV / SumW : float2(0, 0);
+	float NewSide = SumW > 1e-5 ? saturate(SumSide / SumW) : 0.5;
 
 	float4 History = VelocityTrackHistory[Pos];
 	float Damp = saturate(1.0 - DeltaTime * VelocityTrackFadeSpeed);
 	float2 OldV = History.xy * Damp;
-	float OldStrength = History.z * Damp;
 
 	float2 V = lerp(OldV, NewV, MaxW);
-	float Strength = max(OldStrength, MaxW);
+
+	// 横向位置：本帧接触足够强时覆盖为最新一次经过的横向位置，否则保持历史值(不衰减)
+	float Side = MaxW > TimerContactThreshold ? NewSide : History.z;
 
 	// 计时写入：加宽范围内有足够强的接触(且速度达标)就置 1；之后线性衰减，Lifetime 秒后严格为 0
 	float TimerWrite = MaxTimerW > TimerContactThreshold ? 1.0 : 0.0;
 	float Timer = max(max(History.w - DeltaTime * TimerInvLifetime, 0.0), TimerWrite);
 
-	VelocityTrackResult[Pos] = float4(V, Strength, Timer);
+	VelocityTrackResult[Pos] = float4(V, Side, Timer);
 }

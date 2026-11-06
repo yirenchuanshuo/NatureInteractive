@@ -104,7 +104,8 @@ public:
 	UPROPERTY(EditDefaultsOnly,Category = "Snow|Texture|DiffusionTexture")
 	TObjectPtr<UTextureRenderTarget2D> SnowVelocityNormalOutput;
 	
-	// RG: 轨迹速度(与 SnowVelocityInput 同单位)，B: 轨迹强度(0~1)，随 VelocityTrackFadeSpeed 衰减
+	// RG: 轨迹速度(与 SnowVelocityInput 同单位)，随 VelocityTrackFadeSpeed 衰减
+	// B: 横向位置(0~1)，轨迹中线 0.5，沿运动方向看左侧 < 0.5、右侧 > 0.5，两侧边缘趋向 0 / 1；写入后保持不衰减
 	// A: 写入计时(0~1)，有接触时为 1，按 VelocityTrackLifetime 线性衰减到 0。需要 RGBA16f/32f 格式
 	UPROPERTY(EditDefaultsOnly,Category = "Snow|Texture|VelocityTrack")
 	TObjectPtr<UTextureRenderTarget2D> SnowVelocityTrack;

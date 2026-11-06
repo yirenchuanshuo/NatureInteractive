@@ -11,7 +11,20 @@ struct FMeshVelocityContactBody
 	float2 WorldMax;
 	float2 LinearVelocity;
 	float2 Pad; // x = 包围盒模式下的接触力度(0~1)
+	float2 MoveDir; // 水平运动方向(单位向量)
 };
+
+// 输出: xy = 速度(m/s), z = 压入力度, w = 未命中 0 / 命中 1 + Side
+// Side = 像素在运动方向垂直轴上的横向位置(0~1)：中线 0.5，运动方向右侧(+Y 侧，当方向为 +X 时) > 0.5，
+// 包围盒在该轴上的投影边缘分别为 0 / 1。读取方 saturate(w) 仍得到命中标记
+float ComputeLateralSide(float2 WorldXY, FMeshVelocityContactBody Body)
+{
+	float2 Center = (Body.WorldMin + Body.WorldMax) * 0.5;
+	float2 Half = (Body.WorldMax - Body.WorldMin) * 0.5;
+	float2 Perp = float2(-Body.MoveDir.y, Body.MoveDir.x);
+	float HalfWidth = abs(Half.x * Perp.x) + abs(Half.y * Perp.y);
+	return saturate(0.5 + 0.5 * dot(WorldXY - Center, Perp) / max(HalfWidth, 1e-3));
+}
 
 Texture2D<float> DepthInput;
 RWTexture2D<float4> VelocityOutput;
@@ -52,6 +65,7 @@ void MeshVelocityRasterizeCS(uint3 ThreadId : SV_DispatchThreadID)
 	
 	float2 BestVelocity = float2(0,0);
 	float BestForce = 0;
+	float BestSide = 0.5;
 	float BestArea = 1e20;
 	bool bHit = false;
 	
@@ -68,6 +82,7 @@ void MeshVelocityRasterizeCS(uint3 ThreadId : SV_DispatchThreadID)
 				BestArea = Area;
 				BestVelocity = Body.LinearVelocity;
 				BestForce = Body.Pad.x;
+				BestSide = ComputeLateralSide(WorldXY, Body);
 				bHit = true;
 			}
 		}
@@ -76,5 +91,5 @@ void MeshVelocityRasterizeCS(uint3 ThreadId : SV_DispatchThreadID)
 #if MESH_VELOCITY_WRITE_BY_BOUNDS
 	float Force = bHit ? BestForce : 0.0;
 #endif
-	VelocityOutput[PixelId] = float4(BestVelocity, Force, bHit? 1.0:0.0);
+	VelocityOutput[PixelId] = float4(BestVelocity, Force, bHit ? 1.0 + BestSide : 0.0);
 }

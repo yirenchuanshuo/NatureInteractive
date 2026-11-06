@@ -60,6 +60,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category="Velocity", meta=(EditCondition="bWriteVelocityByBounds"))
 	float VelocityBoundsExpand = 0.f;
 	
+	// 更新运动方向所需的最小水平速度(cm/s)。低于此速度(静止/抖动)时沿用上一次的方向，
+	// 用于计算轨迹横向位置(速度图 W 通道：命中时 = 1 + 横向位置(0~1))
+	UPROPERTY(EditDefaultsOnly, Category="Velocity", meta=(ClampMin="0.0"))
+	float MoveDirMinSpeed = 5.f;
+	
 protected:
 	UPROPERTY(EditDefaultsOnly, Category="Velocity")
 	TObjectPtr<UTextureRenderTarget2D> VelocityRenderTarget;

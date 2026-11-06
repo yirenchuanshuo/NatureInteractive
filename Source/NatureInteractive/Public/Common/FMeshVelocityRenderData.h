@@ -8,6 +8,8 @@ struct FMeshVelocityRecord
 	TWeakObjectPtr<UMeshComponent> Mesh;
 	FVector PrevLocation = FVector::ZeroVector;
 	FQuat PrevRotation = FQuat::Identity;
+	// 最近一次有效的水平运动方向(单位向量)，静止时沿用
+	FVector2f LastMoveDir = FVector2f(1.f, 0.f);
 };
 
 struct FMeshVelocityContactBody
@@ -17,6 +19,8 @@ struct FMeshVelocityContactBody
 	FVector2f LinearVelocity;
 	// x = 包围盒模式下该物体的接触力度(0~1)，y 保留
 	FVector2f Pad = FVector2f::ZeroVector;
+	// 水平运动方向(单位向量，世界 XY)
+	FVector2f MoveDir = FVector2f(1.f, 0.f);
 };
 
 class FMeshVelocityRenderData

@@ -71,7 +71,7 @@ class FSnowInteractiveDilateVelocityTrackHCS : public FGlobalShader
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 	SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, SnowVelocityInput)
 	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, DilateHOutputA)
-	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float>, DilateHOutputB)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float2>, DilateHOutputB)
 	SHADER_PARAMETER(int32,DilateRadius)
 	SHADER_PARAMETER(float,DilateFalloff)
 	SHADER_PARAMETER(float,TimerMinSpeed)
@@ -99,7 +99,7 @@ class FSnowInteractiveAccumulateVelocityTrackCS : public FGlobalShader
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 	SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, DilateHInputA)
-	SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float>, DilateHInputB)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float2>, DilateHInputB)
 	SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, VelocityTrackHistory)
 	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, VelocityTrackResult)
 	SHADER_PARAMETER(float,VelocityTrackFadeSpeed)
@@ -245,7 +245,7 @@ void FSnowAddTrackPass::AddVelocityTrackPass(FRDGBuilder& GraphBuilder, const FS
 	FRDGTextureRef DilateA = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(
 		Desc.Extent, PF_FloatRGBA, FClearValueBinding::Black, TexCreate_ShaderResource | TexCreate_UAV), TEXT("SnowVelocityTrackDilateA"));
 	FRDGTextureRef DilateB = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(
-		Desc.Extent, PF_R16F, FClearValueBinding::Black, TexCreate_ShaderResource | TexCreate_UAV), TEXT("SnowVelocityTrackDilateB"));
+		Desc.Extent, PF_G16R16F, FClearValueBinding::Black, TexCreate_ShaderResource | TexCreate_UAV), TEXT("SnowVelocityTrackDilateB"));
 	{
 		FSnowInteractiveDilateVelocityTrackHCS::FParameters* Parameters = GraphBuilder.AllocParameters<FSnowInteractiveDilateVelocityTrackHCS::FParameters>();
 		Parameters->SnowVelocityInput = SnowVelocityInput;
