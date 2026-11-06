@@ -9,6 +9,14 @@
 #include "Kismet/KismetMaterialLibrary.h"
 #include "Materials/MaterialParameterCollection.h"
 #include "Snow/SnowInteractiveRender.h"
+#include "HAL/IConsoleManager.h"
+
+static TAutoConsoleVariable<int32> CVarSnowInteractiveEnable(
+	TEXT("r.NatureInteractive.Snow.Enable"),
+	1,
+	TEXT("0: disable capture and simulation of all SnowInteractiveComponents (for profiling).\n")
+	TEXT("1: follow each component's bEnableSnowInteractive (default)."),
+	ECVF_Default);
 
 
 // Sets default values for this component's properties
@@ -56,7 +64,7 @@ void USnowInteractiveComponent::BeginPlay()
 	SnowInteractiveRender->InitRenderProcess(*this);
 
 	SnowInput = SnowInteractiveActor->CaptureRenderTarget;
-	if (bUseSnowDiffusion)
+	if (NeedVelocityInput())
 	{
 		SnowVelocityInput = SnowInteractiveActor->VelocityRenderTarget;
 	}
@@ -86,7 +94,9 @@ void USnowInteractiveComponent::TickComponent(float DeltaTime, ELevelTick TickTy
                                               FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	if (!SnowInteractiveActor)
+	// 关闭时连 UpdateOffsetData 一起跳过：重新开启后的第一帧 Previous 仍是关闭前的位置，
+	// 偏移量覆盖整段移动距离，旧数据会被正确平移/移出
+	if (!SnowInteractiveActor || !IsSnowInteractiveActive())
 	{
 		return;
 	}
@@ -102,6 +112,16 @@ void USnowInteractiveComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 			SnowRenderer->AddPasses(GraphBuilder, &RenderDataSnapshot);
 		}
 	});
+}
+
+void USnowInteractiveComponent::SetSnowInteractiveEnabled(bool bEnabled)
+{
+	bEnableSnowInteractive = bEnabled;
+}
+
+bool USnowInteractiveComponent::IsSnowInteractiveActive() const
+{
+	return bEnableSnowInteractive && CVarSnowInteractiveEnable.GetValueOnGameThread() != 0;
 }
 
 void USnowInteractiveComponent::InitOutputTextureAttributes() const
@@ -120,13 +140,34 @@ void USnowInteractiveComponent::InitOutputTextureAttributes() const
 
 	if (bUseSnowDiffusion)
 	{
+		// UTextureRenderTarget2D 默认 ClearColor 为绿色(0,1,0,1)，状态纹理必须从 0 开始
 		SnowVelocityOutput->bSupportsUAV = true;
+		SnowVelocityOutput->ClearColor = FLinearColor::Transparent;
 		SnowVelocityOutput->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
 		SnowVelocityOutput->UpdateResourceImmediate(true);
 
 		SnowVelocityHeightOutput->bSupportsUAV = true;
+		// 流沙高度图以 HeightBias 为平面基准，首帧前也保持该灰度
+		SnowVelocityHeightOutput->ClearColor = UseQuicksandSimulation()
+			? FLinearColor(QuicksandHeightBias, 0.f, 0.f, 0.f)
+			: FLinearColor::Transparent;
+		SnowVelocityHeightOutput->Filter = TF_Bilinear;
 		SnowVelocityHeightOutput->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
 		SnowVelocityHeightOutput->UpdateResourceImmediate(true);
+
+		SnowVelocityNormalOutput->bSupportsUAV = true;
+		SnowVelocityNormalOutput->ClearColor = FLinearColor(0.f, 0.f, 1.f, 1.f);
+		SnowVelocityNormalOutput->Filter = TF_Bilinear;
+		SnowVelocityNormalOutput->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
+		SnowVelocityNormalOutput->UpdateResourceImmediate(true);
+	}
+
+	if (bUseSnowVelocityTrack)
+	{
+		SnowVelocityTrack->bSupportsUAV = true;
+		SnowVelocityTrack->ClearColor = FLinearColor::Transparent;
+		SnowVelocityTrack->InitAutoFormat(SnowInput->SizeX, SnowInput->SizeY);
+		SnowVelocityTrack->UpdateResourceImmediate(true);
 	}
 }
 

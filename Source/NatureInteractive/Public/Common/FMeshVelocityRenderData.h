@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+class UMeshComponent;
 class UMeshVelocityCaptureComponent;
 
 struct FMeshVelocityRecord
@@ -14,6 +15,7 @@ struct FMeshVelocityContactBody
 	FVector2f WorldMin;
 	FVector2f WorldMax;
 	FVector2f LinearVelocity;
+	// x = 包围盒模式下该物体的接触力度(0~1)，y 保留
 	FVector2f Pad = FVector2f::ZeroVector;
 };
 
@@ -35,8 +37,12 @@ public:
 	float CaptureZ = 0.f;
 	float InteractiveHeight = 30.f;
 	float InteractiveDistance = 10.f;
+	bool bWriteByBounds = false;
 	
 	void InitRenderData(const UMeshVelocityCaptureComponent& CaptureComponent);
+	
+	// 写入速度纹理的值 = 世界速度(cm/s) * VelocityScale，即 m/s，世界坐标轴
+	static constexpr float VelocityScale = 0.01f;
 	
 	static constexpr uint32 ThreadX = 8;
 	static constexpr uint32 ThreadY = 8;

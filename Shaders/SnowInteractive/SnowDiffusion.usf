@@ -1,33 +1,30 @@
 #include "/Engine/Private/Common.ush"
-Texture2D<float4> SnowVelocityInput;
+
+// 隐式扩散 (I - a·∇²) x = b 的 Jacobi 迭代
+// b: 本帧扩散前的速度（迭代过程中保持不变）
+// x: 上一次迭代结果
+Texture2D<float4> SnowVelocitySource;
+Texture2D<float4> SnowVelocityPrev;
 RWTexture2D<float4> SnowDiffusionOutput;
-float DeltaTime;
-float TexSize;
-float Diffusion;
+int2 TextureSize;
+float Alpha; // DeltaTime * Diffusion，单位 texel²
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void SnowDiffusionCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	int2 Pos = ThreadId.xy;
+	int2 Pos = int2(ThreadId.xy);
+	if (any(Pos >= TextureSize))
+	{
+		return;
+	}
 
-	int2 PosRight = Pos + int2(1,0);
-	int2 PosLeft = Pos + int2(-1,0);
-	int2 PosDown = Pos + int2(0,1);
-	int2 PosUp = Pos + int2(0,-1);
+	const int2 MaxPos = TextureSize - 1;
+	float2 B = SnowVelocitySource[Pos].xy;
+	float2 VRight = SnowVelocityPrev[min(Pos + int2(1, 0), MaxPos)].xy;
+	float2 VLeft  = SnowVelocityPrev[max(Pos - int2(1, 0), 0)].xy;
+	float2 VDown  = SnowVelocityPrev[min(Pos + int2(0, 1), MaxPos)].xy;
+	float2 VUp    = SnowVelocityPrev[max(Pos - int2(0, 1), 0)].xy;
 
-	// Handle edge cases by clamping to the border
-	PosRight = min(PosRight, int2(TexSize-1, TexSize-1));
-	PosLeft = max(PosLeft, int2(0, 0));
-	PosDown = min(PosDown, int2(TexSize-1, TexSize-1));
-	PosUp = max(PosUp, int2(0, 0));
-
-	float3 V0 = float3(SnowVelocityInput[Pos].xy, 0);
-	float3 VRight = float3(SnowVelocityInput[PosRight].xy, 0);
-	float3 VLeft = float3(SnowVelocityInput[PosLeft].xy, 0);
-	float3 VDown = float3(SnowVelocityInput[PosDown].xy, 0);
-	float3 VUp = float3(SnowVelocityInput[PosUp].xy, 0);
-
-	float A = DeltaTime * Diffusion * TexSize * TexSize;
-	float3 Velocity = ((VRight + VLeft + VDown + VUp ) * A + V0)/(1 + 4 * A);
-	SnowDiffusionOutput[Pos] = float4(Velocity,1);
+	float2 V = (B + Alpha * (VRight + VLeft + VDown + VUp)) / (1.0 + 4.0 * Alpha);
+	SnowDiffusionOutput[Pos] = float4(V, 0, 1);
 }

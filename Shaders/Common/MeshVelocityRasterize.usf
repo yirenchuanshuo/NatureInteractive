@@ -1,11 +1,16 @@
 ﻿#include "/Engine/Private/Common.ush"
 
+// 静态开关(shader 变体)：1 = 按接触体包围盒范围整块写入速度，不读深度
+#ifndef MESH_VELOCITY_WRITE_BY_BOUNDS
+#define MESH_VELOCITY_WRITE_BY_BOUNDS 0
+#endif
+
 struct FMeshVelocityContactBody
 {
 	float2 WorldMin;
 	float2 WorldMax;
 	float2 LinearVelocity;
-	float2 Pad;
+	float2 Pad; // x = 包围盒模式下的接触力度(0~1)
 };
 
 Texture2D<float> DepthInput;
@@ -29,6 +34,7 @@ void MeshVelocityRasterizeCS(uint3 ThreadId : SV_DispatchThreadID)
 		return;
 	}
 	
+#if !MESH_VELOCITY_WRITE_BY_BOUNDS
 	float Depth = DepthInput.Load(int3(PixelId, 0)).x;
 	float FootZ = CaptureLocationAndZ.w + Depth;
 	float Penetration = InteractiveHeight - FootZ;
@@ -38,12 +44,14 @@ void MeshVelocityRasterizeCS(uint3 ThreadId : SV_DispatchThreadID)
 		VelocityOutput[PixelId] = float4(0,0,0,0);
 		return;
 	}
+#endif
 	
 	float2 PosUV = (float2(PixelId)+0.5)/float2(OutputSize);
 	PosUV.y = 1.0 - PosUV.y;
 	float2 WorldXY = CaptureLocationAndZ.xyz + (PosUV - 0.5) * CaptureRange;
 	
 	float2 BestVelocity = float2(0,0);
+	float BestForce = 0;
 	float BestArea = 1e20;
 	bool bHit = false;
 	
@@ -59,9 +67,14 @@ void MeshVelocityRasterizeCS(uint3 ThreadId : SV_DispatchThreadID)
 			{
 				BestArea = Area;
 				BestVelocity = Body.LinearVelocity;
+				BestForce = Body.Pad.x;
 				bHit = true;
 			}
 		}
 	}
+	
+#if MESH_VELOCITY_WRITE_BY_BOUNDS
+	float Force = bHit ? BestForce : 0.0;
+#endif
 	VelocityOutput[PixelId] = float4(BestVelocity, Force, bHit? 1.0:0.0);
 }

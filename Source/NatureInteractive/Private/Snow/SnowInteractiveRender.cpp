@@ -6,6 +6,7 @@
 #include "Snow/SnowDiffusionPass.h"
 #include "Snow/SnowInteractiveComponent.h"
 #include "Snow/SnowProjectPass.h"
+#include "Snow/SnowQuicksandPass.h"
 #include "Snow/SnowTrackBlurPass.h"
 #include "RenderGraphBuilder.h"
 
@@ -18,11 +19,14 @@ FSnowInteractiveRender::FSnowInteractiveRender()
 	DiffusionPass = MakePimpl<FSnowDiffusionPass>();
 	AdvectPass = MakePimpl<FSnowAdvectPass>();
 	ProjectPass = MakePimpl<FSnowProjectPass>();
+	QuicksandPass = MakePimpl<FSnowQuicksandPass>();
 }
 
 void FSnowInteractiveRender::InitRenderProcess(const USnowInteractiveComponent& SnowInteractiveComponent)
 {
-	bRenderDiffusionData = SnowInteractiveComponent.bUseSnowDiffusion;
+	bRenderDiffusionData = SnowInteractiveComponent.UseFluidSimulation();
+	bRenderQuicksand = SnowInteractiveComponent.UseQuicksandSimulation();
+	bRenderVelocityTrack = SnowInteractiveComponent.bUseSnowVelocityTrack;
 }
 
 void FSnowInteractiveRender::Render(const USnowInteractiveComponent& SnowInteractiveComponent) const
@@ -50,14 +54,27 @@ void FSnowInteractiveRender::AddPasses(FRDGBuilder& GraphBuilder, const FSnowInt
 	TrackBlurPass->AddPass(GraphBuilder,RenderData);
 	SnowDataOutputPass->AddPass(GraphBuilder,RenderData);
 
+	// 此时 SnowVelocityInput 已由同一 RDG 中的速度光栅化 Pass 写入本帧数据
+	if (bRenderVelocityTrack)
+	{
+		OffsetPass->AddVelocityTrackPass(GraphBuilder,RenderData);
+		AddTrackPass->AddVelocityTrackPass(GraphBuilder,RenderData);
+	}
+
 	if (bRenderDiffusionData)
 	{
+		OffsetPass->AddVelocityPass(GraphBuilder,RenderData);
 		AddTrackPass->AddVelocityPass(GraphBuilder,RenderData);
 		DiffusionPass->AddPass(GraphBuilder,RenderData);
 		AdvectPass->AddPass(GraphBuilder,RenderData);
 		ProjectPass->AddPass(GraphBuilder,RenderData);
-		OffsetPass->AddVelocityPass(GraphBuilder,RenderData);
 		SnowDataOutputPass->AddVelocityPass(GraphBuilder,RenderData);
+	}
+	else if (bRenderQuicksand)
+	{
+		// 状态纹理随捕获器平移后再做模拟
+		OffsetPass->AddVelocityPass(GraphBuilder,RenderData);
+		QuicksandPass->AddPass(GraphBuilder,RenderData);
 	}
 }
 

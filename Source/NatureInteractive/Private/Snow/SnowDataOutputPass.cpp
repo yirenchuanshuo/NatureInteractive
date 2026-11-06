@@ -130,7 +130,7 @@ void FSnowDataOutputPass::AddVelocityPass(FRDGBuilder& GraphBuilder,
     SnowVelocityHeightOutputParameters->TextureSize = FIntPoint(RenderData->SizeX, RenderData->SizeY);
     SnowVelocityHeightOutputParameters->DeltaTime = RenderData->DeltaTime;
 
-    auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
+    const FIntVector GroupCount = FSnowInteractiveRenderData::GetGroupCount(SnowVelocityHeightOutput->Desc.Extent);
     FComputeShaderUtils::AddPass(GraphBuilder, RDG_EVENT_NAME("SnowVelocityHeightOutput"), SnowVelocityHeightOutputComputeShader, SnowVelocityHeightOutputParameters, GroupCount);
 
     FRDGTextureRef SnowVelocityNormalOutput = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityNormalOutputData->GetRenderTargetTexture(), TEXT("SnowVelocityNormal_ExternalOutput"));

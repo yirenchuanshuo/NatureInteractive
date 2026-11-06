@@ -13,8 +13,9 @@ class FSnowInteractiveAdvectCS : public FGlobalShader
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 	SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, SnowDiffusionInput)
 	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, SnowAdvectOutput)
+	SHADER_PARAMETER(FIntPoint,TextureSize)
+	SHADER_PARAMETER(FVector2f,VelocityToTexel)
 	SHADER_PARAMETER(float,DeltaTime)
-	SHADER_PARAMETER(float,TexSize)
 	SHADER_PARAMETER(float,Viscosity)
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -35,30 +36,27 @@ IMPLEMENT_SHADER_TYPE(,FSnowInteractiveAdvectCS, TEXT("/Plugin/NatureInteractive
 
 void FSnowAdvectPass::AddPass(FRDGBuilder& GraphBuilder, const FSnowInteractiveRenderData* RenderData)
 {
-	FRDGTextureDesc Desc(FRDGTextureDesc::Create2D(
-		FIntPoint(RenderData->SizeX, RenderData->SizeY),
-		RenderData->OutputUAVFormat,
-		FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
+	FRDGTextureRef SnowVelocity = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityOutputData->GetRenderTargetTexture(), TEXT("SnowAdvectInput"));
 
-
-	FRDGTextureRef SnowDiffusionTexture = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityOutputData->GetRenderTargetTexture(), TEXT("SnowDiffusionInput"));
+	const FRDGTextureDesc Desc = FRDGTextureDesc::Create2D(
+		SnowVelocity->Desc.Extent,
+		SnowVelocity->Desc.Format,
+		FClearValueBinding::Black, TexCreate_ShaderResource | TexCreate_UAV);
 	FRDGTextureRef SnowAdvectTexture = GraphBuilder.CreateTexture(Desc, TEXT("SnowAdvectTexture"));
-	//FRDGTextureRef SnowAdvectTexture = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityDiffusionOutputData->GetRenderTargetTexture(), TEXT("SnowAdvectTexture"));
-	FRDGTextureUAVRef SnowAdvectUAV = GraphBuilder.CreateUAV(SnowAdvectTexture);
 
-	TShaderMapRef<FSnowInteractiveAdvectCS> SnowAdvectComputeShader(GetGlobalShaderMap(GMaxRHIFeatureLevel));
+	TShaderMapRef<FSnowInteractiveAdvectCS> SnowAdvectComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
 	FSnowInteractiveAdvectCS::FParameters* SnowAdvectParameters = GraphBuilder.AllocParameters<FSnowInteractiveAdvectCS::FParameters>();
-	SnowAdvectParameters->SnowDiffusionInput = SnowDiffusionTexture;
-	SnowAdvectParameters->SnowAdvectOutput = SnowAdvectUAV;
+	SnowAdvectParameters->SnowDiffusionInput = SnowVelocity;
+	SnowAdvectParameters->SnowAdvectOutput = GraphBuilder.CreateUAV(SnowAdvectTexture);
+	SnowAdvectParameters->TextureSize = Desc.Extent;
+	SnowAdvectParameters->VelocityToTexel = RenderData->VelocityToTexel;
 	SnowAdvectParameters->DeltaTime = RenderData->DeltaTime;
-	SnowAdvectParameters->TexSize = RenderData->SizeX;
 	SnowAdvectParameters->Viscosity = RenderData->Viscosity;
 
-	auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
+	const FIntVector GroupCount = FSnowInteractiveRenderData::GetGroupCount(Desc.Extent);
 	FComputeShaderUtils::AddPass(GraphBuilder,RDG_EVENT_NAME("SnowAdvectCS"),SnowAdvectComputeShader,SnowAdvectParameters,GroupCount);
 
-
-	AddCopyTexturePass(GraphBuilder, SnowAdvectTexture, SnowDiffusionTexture,FRHICopyTextureInfo());
+	AddCopyTexturePass(GraphBuilder, SnowAdvectTexture, SnowVelocity, FRHICopyTextureInfo());
 }
 
 void FSnowAdvectPass::Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData)

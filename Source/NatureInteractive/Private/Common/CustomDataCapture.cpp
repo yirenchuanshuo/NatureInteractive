@@ -42,10 +42,6 @@ void ACustomDataCapture::BeginPlay()
 void ACustomDataCapture::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	if (bCaptureVelocity)
-	{
-		VelocityCaptureComponent->CaptureMeshVelocity(CameraComponent,Meshes,MeshVelocityRecords,DeltaTime);
-	}
 }
 
 void ACustomDataCapture::AddMesh(const UCustomMeshInfoComponent* MeshInfoComponent)
@@ -72,6 +68,23 @@ void ACustomDataCapture::RemoveMesh(const UCustomMeshInfoComponent* MeshInfoComp
 
 void ACustomDataCapture::CaptureDepth(TFunction<void(FRDGBuilder&)>&& PostRenderGraphCallback)
 {
+	// 速度光栅化依赖本帧深度，必须放在深度 Pass 写回 CaptureRenderTarget 之后、外部回调之前执行
+	if (bCaptureVelocity && VelocityCaptureComponent)
+	{
+		const float DeltaTime = GetWorld() ? GetWorld()->GetDeltaSeconds() : 0.f;
+		TFunction<void(FRDGBuilder&)> VelocityPassCallback = VelocityCaptureComponent->BuildMeshVelocityPassCallback(Meshes,MeshVelocityRecords,DeltaTime);
+		if (VelocityPassCallback)
+		{
+			PostRenderGraphCallback = [VelocityPassCallback = MoveTemp(VelocityPassCallback), UserCallback = MoveTemp(PostRenderGraphCallback)](FRDGBuilder& GraphBuilder)
+			{
+				VelocityPassCallback(GraphBuilder);
+				if (UserCallback)
+				{
+					UserCallback(GraphBuilder);
+				}
+			};
+		}
+	}
 	MeshDepthCaptureComponent->CaptureCustomMeshDepth(CameraComponent,Meshes,MoveTemp(PostRenderGraphCallback));
 }
 

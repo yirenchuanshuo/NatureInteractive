@@ -1,0 +1,463 @@
+#include "/Engine/Private/Common.ush"
+
+// 流沙：带惯性的过阻尼浅层颗粒流，高度质量守恒
+// 高度 h 为有符号偏移，单位 1 = InteractiveDistance；负为下陷，正为堆积
+// 持久状态(SnowVelocityOutput): R = h, G = 本帧占用, BA = 沙子速度(texel/s，纹理空间)
+// 工作纹理(Work): x = h, y = 通道噪声(-1~1，世界空间固定), zw = 速度
+// 辅助纹理(Aux):  x = 目标高度, y = 软占用(0~1), zw = 物体速度(texel/s)
+
+int2 TextureSize;
+float DeltaTime;
+
+Texture2D<float4> QuicksandFlowNoise;
+SamplerState QuicksandFlowNoiseSampler;
+float2 CaptureLocation;
+float InteractiveRange;
+float FlowNoiseScale;
+
+bool IsInside(int2 P)
+{
+	return all(P >= 0) && all(P < TextureSize);
+}
+
+int2 ClampPos(int2 P)
+{
+	return clamp(P, 0, TextureSize - 1);
+}
+
+// 纹理像素 -> 世界空间噪声 UV，噪声不随捕获区域移动
+float2 FlowNoiseUV(int2 Pos)
+{
+	float2 PosUV = (float2(Pos) + 0.5) / float2(TextureSize);
+	PosUV.y = 1.0 - PosUV.y;
+	return (CaptureLocation + (PosUV - 0.5) * InteractiveRange) * FlowNoiseScale;
+}
+
+float SampleFlowNoiseChannel(float2 NoiseUV)
+{
+	return QuicksandFlowNoise.SampleLevel(QuicksandFlowNoiseSampler, NoiseUV, 0).r * 2.0 - 1.0;
+}
+
+//------------------------------------------------------------------------------
+// Prepare：软占用、目标高度、物体速度；读取上一帧状态并做整体回归
+//------------------------------------------------------------------------------
+Texture2D<float> SnowForceInput;
+Texture2D<float4> SnowVelocityInput;
+Texture2D<float4> QuicksandStateInput;
+RWTexture2D<float4> QuicksandAuxOutput;
+RWTexture2D<float4> QuicksandWorkOutput;
+float InteractiveHeight;
+float InteractiveDistance;
+float CaptureZ;
+float DepthScale;
+float RecoverSpeed;
+float2 VelocityToTexel;
+int HasVelocityInput;
+int HasFlowNoise;
+
+float ComputeForce(int2 P)
+{
+	float Depth = SnowForceInput[P].x;
+	float FootZ = CaptureZ + Depth;
+	return saturate((InteractiveHeight - FootZ) / max(InteractiveDistance, 1e-3));
+}
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void QuicksandPrepareCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	int2 Pos = int2(ThreadId.xy);
+	if (!IsInside(Pos))
+	{
+		return;
+	}
+
+	// 3x3 帐篷滤波软化深度轮廓的像素阶梯；物体速度按接触权重平均，让边缘像素也能拿到速度
+	float ForceSum = 0;
+	float2 VelocitySum = 0;
+	float VelocityWeight = 0;
+
+	[unroll]
+	for (int y = -1; y <= 1; ++y)
+	{
+		[unroll]
+		for (int x = -1; x <= 1; ++x)
+		{
+			int2 P = ClampPos(Pos + int2(x, y));
+			float W = (2 - abs(x)) * (2 - abs(y));
+			float F = ComputeForce(P);
+			ForceSum += F * W;
+
+			if (HasVelocityInput != 0)
+			{
+				float4 In = SnowVelocityInput[P];
+				float VW = W * F * saturate(In.w);
+				VelocitySum += In.xy * VW;
+				VelocityWeight += VW;
+			}
+		}
+	}
+
+	float Occupancy = ForceSum / 16.0;
+	float2 ObjectVelocity = VelocityWeight > 1e-4 ? (VelocitySum / VelocityWeight) * VelocityToTexel : 0;
+
+	float4 State = QuicksandStateInput[Pos];
+	float H = State.x * exp(-RecoverSpeed * DeltaTime);
+	float2 U = State.zw;
+
+	// 通道噪声每帧按世界坐标重采样，供挤压压力和面通量使用
+	float ChannelNoise = HasFlowNoise != 0 ? SampleFlowNoiseChannel(FlowNoiseUV(Pos) * 1.37 + float2(0.53, 0.29)) : 0.0;
+
+	QuicksandAuxOutput[Pos] = float4(-Occupancy * DepthScale, Occupancy, ObjectVelocity);
+	QuicksandWorkOutput[Pos] = float4(H, ChannelNoise, U);
+}
+
+//------------------------------------------------------------------------------
+// Velocity：坡度/挤压压力加速 + 动/静摩擦 + 库仑摩擦 + 流动扰动 + 物体带动
+//------------------------------------------------------------------------------
+Texture2D<float4> QuicksandAuxInput;
+Texture2D<float4> QuicksandWorkInput;
+RWTexture2D<float4> QuicksandWorkResult;
+float FlowNoiseFriction; // 摩擦的空间起伏幅度，0~1
+float FlowNoiseSwirl;    // 最大转向速率，rad/s
+float FlowNoisePush;     // 挤压压力的空间起伏幅度，0~1
+float Gravity;
+float PushPressure;
+float Friction;
+float StaticFriction;
+float CoulombFriction;
+float RestSlope;
+float PushBias;
+float MaxSpeed;
+float MomentumAdvection; // 速度自平流混合系数，0~1
+float StaticSpeed;       // texel/s，低于该速度视为静止
+
+// 双线性读取速度，P 为像素中心坐标，边界 clamp
+float2 LoadVelocityBilinear(float2 P)
+{
+	P = clamp(P, 0.0, float2(TextureSize - 1));
+	int2 I0 = int2(floor(P));
+	int2 I1 = min(I0 + 1, TextureSize - 1);
+	float2 F = P - float2(I0);
+
+	float2 V00 = QuicksandWorkInput[I0].zw;
+	float2 V10 = QuicksandWorkInput[int2(I1.x, I0.y)].zw;
+	float2 V01 = QuicksandWorkInput[int2(I0.x, I1.y)].zw;
+	float2 V11 = QuicksandWorkInput[I1].zw;
+	return lerp(lerp(V00, V10, F.x), lerp(V01, V11, F.x), F.y);
+}
+
+// 世界空间固定的扰动：x 调制摩擦，y 控制转向，值域 [-1,1]
+float2 SampleFlowNoise(int2 Pos)
+{
+	float2 NoiseUV = FlowNoiseUV(Pos);
+	return float2(
+		SampleFlowNoiseChannel(NoiseUV),
+		SampleFlowNoiseChannel(NoiseUV * 0.73 + float2(0.37, 0.61)));
+}
+
+float LoadHead(int2 P)
+{
+	P = ClampPos(P);
+	float4 Work = QuicksandWorkInput[P];
+	float4 Aux = QuicksandAuxInput[P];
+	// 物体内部高于目标深度的沙子产生额外压力，把沙子往外推；
+	// 压力沿物体轮廓按噪声起伏，不同方向挤出的初速度不同，波前不再等距
+	float PushScale = max(1.0 + Work.y * FlowNoisePush * 2.0, 0.0);
+	return Work.x + PushPressure * PushScale * Aux.y * max(Work.x - Aux.x, 0.0);
+}
+
+// Scharr 梯度，各方向响应一致，避免 4 邻域带来的菱形/十字形扩散
+float2 ScharrGradient(int2 Pos)
+{
+	float TL = LoadHead(Pos + int2(-1, -1));
+	float T  = LoadHead(Pos + int2( 0, -1));
+	float TR = LoadHead(Pos + int2( 1, -1));
+	float L  = LoadHead(Pos + int2(-1,  0));
+	float R  = LoadHead(Pos + int2( 1,  0));
+	float BL = LoadHead(Pos + int2(-1,  1));
+	float B  = LoadHead(Pos + int2( 0,  1));
+	float BR = LoadHead(Pos + int2( 1,  1));
+
+	float Gx = (3.0 * (TR - TL) + 10.0 * (R - L) + 3.0 * (BR - BL)) / 32.0;
+	float Gy = (3.0 * (BL - TL) + 10.0 * (B - T) + 3.0 * (BR - TR)) / 32.0;
+	return float2(Gx, Gy);
+}
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void QuicksandVelocityCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	int2 Pos = int2(ThreadId.xy);
+	if (!IsInside(Pos))
+	{
+		return;
+	}
+
+	float4 Work = QuicksandWorkInput[Pos];
+	float4 Aux = QuicksandAuxInput[Pos];
+	float2 U = Work.zw;
+
+	// 动量平流(半拉格朗日)：沿速度回溯取上游速度，沙子被搬到哪里速度就带到哪里，形成惯性沙浪
+	if (MomentumAdvection > 0)
+	{
+		float2 Advected = LoadVelocityBilinear(float2(Pos) - U * DeltaTime);
+		U = lerp(U, Advected, MomentumAdvection);
+	}
+
+	// 静止判断用加速前的速度：本子步开始时仍在运动的沙子保持动摩擦
+	float PrevSpeed = length(U);
+
+	float2 Grad = ScharrGradient(Pos);
+	U -= Gravity * Grad * DeltaTime;
+
+	// 不同位置摩擦不同，波前在各方向停下的距离不再相等
+	float2 FlowNoise = SampleFlowNoise(Pos);
+	float FrictionScale = 1.0 + FlowNoise.x * FlowNoiseFriction;
+
+	// 动/静摩擦切换：
+	// - 正在运动(速度 > StaticSpeed)的沙子保持动摩擦，冲到平地上也不会被立刻刹停
+	// - 静止的沙子只有坡度超过 RestSlope 才启动，平缓的轨迹坑壁保持不动
+	// 两个条件取最大值，均用 smoothstep 平滑过渡避免台阶状等高线
+	float Slope = length(Grad);
+	float SlopeMoving = RestSlope > 1e-5 ? smoothstep(RestSlope * 0.5, RestSlope * 1.5, Slope) : 1.0;
+	float SpeedMoving = StaticSpeed > 1e-5 ? smoothstep(StaticSpeed * 0.5, StaticSpeed * 1.5, PrevSpeed) : 0.0;
+	float Moving = max(SlopeMoving, SpeedMoving);
+	U *= exp(-lerp(StaticFriction, Friction, Moving) * FrictionScale * DeltaTime);
+
+	// 库仑摩擦：固定减速量，速度不足以抵消时直接归零。
+	// 坡度加速低于 CoulombFriction 时静止的沙子始终保持静止，形成真正的休止角
+	float CoulombSpeed = length(U);
+	float CoulombDecel = CoulombFriction * FrictionScale * DeltaTime;
+	U = CoulombSpeed > CoulombDecel ? U * ((CoulombSpeed - CoulombDecel) / CoulombSpeed) : float2(0, 0);
+
+	// 按位置旋转速度：只改方向不改大小，相邻区域转向不同，使波前分叉、卷曲成烟雾状
+	float SwirlAngle = FlowNoise.y * FlowNoiseSwirl * DeltaTime;
+	float SwirlSin = sin(SwirlAngle);
+	float SwirlCos = cos(SwirlAngle);
+	U = float2(U.x * SwirlCos - U.y * SwirlSin, U.x * SwirlSin + U.y * SwirlCos);
+
+	// 物体只补足沿运动方向的速度分量，不抹掉挤压产生的侧向速度
+	float ObjectSpeed = length(Aux.zw);
+	if (ObjectSpeed > 1e-3)
+	{
+		float2 Dir = Aux.zw / ObjectSpeed;
+		float Along = dot(U, Dir);
+		U += Dir * max(ObjectSpeed - Along, 0.0) * saturate(Aux.y * PushBias);
+	}
+
+	float Speed = length(U);
+	if (Speed > MaxSpeed)
+	{
+		U *= MaxSpeed / Speed;
+	}
+
+	QuicksandWorkResult[Pos] = float4(Work.x, Work.y, U);
+}
+
+//------------------------------------------------------------------------------
+// Transport：按面通量搬运高度。每个面的通量只由两侧数据决定且两侧取反，总量严格守恒
+//------------------------------------------------------------------------------
+float BaseThickness;
+float FlowNoiseFlux; // 通道导通率的空间起伏幅度，0~1
+
+// 单元导通率 [1 - FlowNoiseFlux, 1]：噪声低处沙子难以通过，高处畅通，形成指状通道
+float CellConductance(float ChannelNoise)
+{
+	return lerp(1.0, smoothstep(0.2, 0.8, ChannelNoise * 0.5 + 0.5), FlowNoiseFlux);
+}
+
+float FaceFlux(float4 WorkA, float4 AuxA, float4 WorkB, float4 AuxB, float2 DirAB)
+{
+	// 正值表示 A -> B
+	float UFace = 0.5 * dot(WorkA.zw + WorkB.zw, DirAB);
+	float ThicknessA = max(BaseThickness + WorkA.x, 0.0);
+	float ThicknessB = max(BaseThickness + WorkB.x, 0.0);
+	float Flux = UFace > 0 ? UFace * ThicknessA : UFace * ThicknessB;
+
+	// 自由区流入物体区被阻挡（按软占用连续衰减），保证物体所在处不会被立即填平
+	float Block = UFace > 0
+		? 1.0 - AuxB.y * (1.0 - AuxA.y)
+		: 1.0 - AuxA.y * (1.0 - AuxB.y);
+
+	// 面导通率取两侧较小值，对两侧完全对称，保持守恒；≤ 1 不破坏 CFL 稳定条件
+	float Conductance = min(CellConductance(WorkA.y), CellConductance(WorkB.y));
+	return Flux * Block * Conductance;
+}
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void QuicksandTransportCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	int2 Pos = int2(ThreadId.xy);
+	if (!IsInside(Pos))
+	{
+		return;
+	}
+
+	const int2 Offsets[4] = { int2(1, 0), int2(-1, 0), int2(0, 1), int2(0, -1) };
+
+	float4 Work = QuicksandWorkInput[Pos];
+	float4 Aux = QuicksandAuxInput[Pos];
+	float NetOut = 0;
+
+	[unroll]
+	for (int i = 0; i < 4; ++i)
+	{
+		int2 NeighborPos = Pos + Offsets[i];
+		if (!IsInside(NeighborPos))
+		{
+			continue;
+		}
+		NetOut += FaceFlux(Work, Aux, QuicksandWorkInput[NeighborPos], QuicksandAuxInput[NeighborPos], float2(Offsets[i]));
+	}
+
+	QuicksandWorkResult[Pos] = float4(Work.x - NetOut * DeltaTime, Work.y, Work.zw);
+}
+
+//------------------------------------------------------------------------------
+// Output：写回持久状态与显示数据
+// 显示纹理(SnowVelocityHeightOutput): R = 高度, G = 堆积遮罩, B = 下陷遮罩, A = 流动遮罩
+// 描边模式下: R = 描边高度, G = 描边遮罩, B = 流经区(去掉波峰), A = 流动遮罩
+//------------------------------------------------------------------------------
+Texture2D<float4> QuicksandFinalWork;
+RWTexture2D<float4> QuicksandStateOutput;
+RWTexture2D<float4> QuicksandVisualHeightOutput;
+float HeightScale;
+float HeightBias;      // 平面基准值，与雪地高度图一致默认 0.5
+float MaskThreshold;   // 高度单位，低于该值的微小起伏不计入遮罩
+float PileupMaskRange; // 高度单位，堆积达到该值时遮罩为 1
+float SinkMaskRange;   // 高度单位，下陷达到该值时遮罩为 1
+float FlowMaskSpeed;   // texel/s，沙子速度达到该值时遮罩为 1
+int OutlineOutput;       // 1 = 描边输出：扣除主体，只保留扩散部分的梯度描边作为波峰
+float OutlineStrength;   // 梯度 -> 描边的倍率
+float OutlineBodyBlend;  // 主体(下陷)按比例叠回，0 = 纯描边
+int OutlineMaskDilate;   // 占用遮罩外扩半径(texel)
+
+// 只取扩散出去的堆积部分(相当于文章中的密度 d)，坑壁不参与描边
+float LoadDiffusedHeight(int2 P)
+{
+	return max(QuicksandFinalWork[ClampPos(P)].x, 0.0);
+}
+
+// 参考文章 M_Output：outline = clamp(length(gradient(density)), 0, 1)
+// 用 Scharr 梯度代替 4 邻域中心差分，各方向响应一致，避免十字形描边
+float ComputeOutline(int2 Pos)
+{
+	float TL = LoadDiffusedHeight(Pos + int2(-1, -1));
+	float T  = LoadDiffusedHeight(Pos + int2( 0, -1));
+	float TR = LoadDiffusedHeight(Pos + int2( 1, -1));
+	float L  = LoadDiffusedHeight(Pos + int2(-1,  0));
+	float R  = LoadDiffusedHeight(Pos + int2( 1,  0));
+	float BL = LoadDiffusedHeight(Pos + int2(-1,  1));
+	float B  = LoadDiffusedHeight(Pos + int2( 0,  1));
+	float BR = LoadDiffusedHeight(Pos + int2( 1,  1));
+
+	float Gx = (3.0 * (TR - TL) + 10.0 * (R - L) + 3.0 * (BR - BL)) / 32.0;
+	float Gy = (3.0 * (BL - TL) + 10.0 * (B - T) + 3.0 * (BR - TR)) / 32.0;
+	return saturate(length(float2(Gx, Gy)) * OutlineStrength);
+}
+
+// 外扩后的占用：圆形邻域内取最大值，按距离线性衰减，边缘柔和
+float DilatedOccupancy(int2 Pos)
+{
+	float Result = QuicksandAuxInput[Pos].y;
+	const int Radius = clamp(OutlineMaskDilate, 0, 4);
+	const float Falloff = 1.0 / (Radius + 1.0);
+
+	[loop]
+	for (int y = -Radius; y <= Radius; ++y)
+	{
+		[loop]
+		for (int x = -Radius; x <= Radius; ++x)
+		{
+			float Dist = length(float2(x, y));
+			if (Dist > Radius + 0.5)
+			{
+				continue;
+			}
+			float Weight = saturate(1.0 - Dist * Falloff);
+			Result = max(Result, QuicksandAuxInput[ClampPos(Pos + int2(x, y))].y * Weight);
+		}
+	}
+	return saturate(Result);
+}
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void QuicksandOutputCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	int2 Pos = int2(ThreadId.xy);
+	if (!IsInside(Pos))
+	{
+		return;
+	}
+
+	float4 Work = QuicksandFinalWork[Pos];
+	float Occupancy = QuicksandAuxInput[Pos].y;
+
+	QuicksandStateOutput[Pos] = float4(Work.x, Occupancy, Work.zw);
+
+	float H = Work.x;
+	float PileupMask = smoothstep(MaskThreshold, max(PileupMaskRange, MaskThreshold + 1e-4), H);
+	float SinkMask = smoothstep(MaskThreshold, max(SinkMaskRange, MaskThreshold + 1e-4), -H);
+	float FlowMask = saturate(length(Work.zw) / max(FlowMaskSpeed, 1e-4));
+
+	// 描边模式：
+	// 1. 只对扩散出去的堆积 max(h,0) 求梯度描边，坑壁不参与
+	// 2. 用外扩后的占用扣掉物体所在区域，避免物体与堆积交界残留亮边
+	// 3. 下陷主体按 OutlineBodyBlend 叠回，0 为纯描边(与文章一致)
+	// 遮罩同步(仅描边模式)：
+	// G = 描边遮罩，与 R 的波峰一致
+	// B = 流经区去掉波峰，对应文章 noise *= saturate(d - outline * 10)，用于混合大颗粒噪声
+	// A = 流动遮罩不变
+	float VisualHeight = H;
+	float MaskG = PileupMask;
+	float MaskB = SinkMask;
+	if (OutlineOutput != 0)
+	{
+		float FreeMask = 1.0 - DilatedOccupancy(Pos);
+		float Outline = ComputeOutline(Pos) * FreeMask;
+		VisualHeight = Outline + min(H, 0.0) * OutlineBodyBlend;
+
+		float FlowedMask = max(PileupMask * FreeMask, SinkMask * OutlineBodyBlend);
+		MaskG = Outline;
+		MaskB = saturate(FlowedMask - Outline * 10.0);
+	}
+
+	QuicksandVisualHeightOutput[Pos] = float4(HeightBias + VisualHeight * HeightScale, MaskG, MaskB, FlowMask);
+}
+
+//------------------------------------------------------------------------------
+// Normal：Scharr 梯度计算法线，强度可调，边界 clamp
+// 约定与 HeightToNormal.usf 一致：N ∝ (-dH/du, -dH/dv, 1)，v 为纹理 +y
+//------------------------------------------------------------------------------
+Texture2D<float4> QuicksandNormalHeightInput;
+RWTexture2D<float4> QuicksandNormalOutput;
+float NormalStrength;
+
+float LoadVisualHeight(int2 P)
+{
+	return QuicksandNormalHeightInput[ClampPos(P)].x;
+}
+
+[numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
+void QuicksandNormalCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	int2 Pos = int2(ThreadId.xy);
+	if (!IsInside(Pos))
+	{
+		return;
+	}
+
+	float TL = LoadVisualHeight(Pos + int2(-1, -1));
+	float T  = LoadVisualHeight(Pos + int2( 0, -1));
+	float TR = LoadVisualHeight(Pos + int2( 1, -1));
+	float L  = LoadVisualHeight(Pos + int2(-1,  0));
+	float R  = LoadVisualHeight(Pos + int2( 1,  0));
+	float BL = LoadVisualHeight(Pos + int2(-1,  1));
+	float B  = LoadVisualHeight(Pos + int2( 0,  1));
+	float BR = LoadVisualHeight(Pos + int2( 1,  1));
+
+	float Gx = (3.0 * (TR - TL) + 10.0 * (R - L) + 3.0 * (BR - BL)) / 32.0;
+	float Gy = (3.0 * (BL - TL) + 10.0 * (B - T) + 3.0 * (BR - TR)) / 32.0;
+
+	float3 N = normalize(float3(-Gx * NormalStrength, -Gy * NormalStrength, 1.0));
+	QuicksandNormalOutput[Pos] = float4(N, 1);
+}

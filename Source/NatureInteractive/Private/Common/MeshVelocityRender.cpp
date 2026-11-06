@@ -27,6 +27,11 @@ void FMeshVelocityRender::Render(const FMeshVelocityRenderData& RenderData) cons
 	}
 }
 
+void FMeshVelocityRender::AddPasses(FRDGBuilder& GraphBuilder, const FMeshVelocityRenderData* RenderData) const
+{
+	VelocityRasterizePass->AddPass(GraphBuilder,RenderData);
+}
+
 void FMeshVelocityRender::Draw(FRHICommandListImmediate& RHICommandList,
 	const FMeshVelocityRenderData* RenderData) const
 {

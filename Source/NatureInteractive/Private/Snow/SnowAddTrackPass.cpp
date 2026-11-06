@@ -63,6 +63,68 @@ public:
 };
 IMPLEMENT_SHADER_TYPE(,FSnowInteractiveAddVelocityTrackCS, TEXT("/Plugin/NatureInteractive/SnowInteractive/SnowAddTrack.usf"), TEXT("SnowAddVelocityTrackCS"), SF_Compute);
 
+class FSnowInteractiveDilateVelocityTrackHCS : public FGlobalShader
+{
+	DECLARE_SHADER_TYPE(FSnowInteractiveDilateVelocityTrackHCS, Global);
+	SHADER_USE_PARAMETER_STRUCT(FSnowInteractiveDilateVelocityTrackHCS, FGlobalShader);
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, SnowVelocityInput)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, DilateHOutputA)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float>, DilateHOutputB)
+	SHADER_PARAMETER(int32,DilateRadius)
+	SHADER_PARAMETER(float,DilateFalloff)
+	SHADER_PARAMETER(float,TimerMinSpeed)
+	END_SHADER_PARAMETER_STRUCT()
+
+public:
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("SIZE_X"), FSnowInteractiveRenderData::ThreadX);
+		OutEnvironment.SetDefine(TEXT("SIZE_Y"), FSnowInteractiveRenderData::ThreadY);
+		OutEnvironment.SetDefine(TEXT("SIZE_Z"), FSnowInteractiveRenderData::ThreadZ);
+	}
+};
+IMPLEMENT_SHADER_TYPE(,FSnowInteractiveDilateVelocityTrackHCS, TEXT("/Plugin/NatureInteractive/SnowInteractive/SnowAddTrack.usf"), TEXT("SnowDilateVelocityTrackHCS"), SF_Compute);
+
+class FSnowInteractiveAccumulateVelocityTrackCS : public FGlobalShader
+{
+	DECLARE_SHADER_TYPE(FSnowInteractiveAccumulateVelocityTrackCS, Global);
+	SHADER_USE_PARAMETER_STRUCT(FSnowInteractiveAccumulateVelocityTrackCS, FGlobalShader);
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, DilateHInputA)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float>, DilateHInputB)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float4>, VelocityTrackHistory)
+	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, VelocityTrackResult)
+	SHADER_PARAMETER(float,VelocityTrackFadeSpeed)
+	SHADER_PARAMETER(float,DeltaTime)
+	SHADER_PARAMETER(int32,DilateRadius)
+	SHADER_PARAMETER(float,DilateFalloff)
+	SHADER_PARAMETER(float,TimerInvLifetime)
+	SHADER_PARAMETER(float,TimerContactThreshold)
+	END_SHADER_PARAMETER_STRUCT()
+
+public:
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("SIZE_X"), FSnowInteractiveRenderData::ThreadX);
+		OutEnvironment.SetDefine(TEXT("SIZE_Y"), FSnowInteractiveRenderData::ThreadY);
+		OutEnvironment.SetDefine(TEXT("SIZE_Z"), FSnowInteractiveRenderData::ThreadZ);
+	}
+};
+IMPLEMENT_SHADER_TYPE(,FSnowInteractiveAccumulateVelocityTrackCS, TEXT("/Plugin/NatureInteractive/SnowInteractive/SnowAddTrack.usf"), TEXT("SnowAccumulateVelocityTrackCS"), SF_Compute);
+
 void FSnowAddTrackPass::AddPass(FRDGBuilder& GraphBuilder, const FSnowInteractiveRenderData* RenderData)
 {
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create2D(
@@ -112,14 +174,13 @@ void FSnowAddTrackPass::Draw(FRHICommandListImmediate& RHICommandList, const FSn
 void FSnowAddTrackPass::AddVelocityPass(FRDGBuilder& GraphBuilder,
 	const FSnowInteractiveRenderData* RenderData)
 {
-	FRDGTextureDesc Desc(FRDGTextureDesc::Create2D(
-		FIntPoint(RenderData->SizeX, RenderData->SizeY),
-		RenderData->OutputUAVFormat,
-		FClearValueBinding::Black, TexCreate_RenderTargetable | TexCreate_UAV));
-
-
 	FRDGTextureRef SnowVelocityInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityInputData->GetRenderTargetTexture(), TEXT("SnowVelocityInput"));
 	FRDGTextureRef SnowVelocityTrackInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityOutputData->GetRenderTargetTexture(), TEXT("SnowVelocityTrackInput"));
+
+	const FRDGTextureDesc Desc = FRDGTextureDesc::Create2D(
+		SnowVelocityTrackInput->Desc.Extent,
+		SnowVelocityTrackInput->Desc.Format,
+		FClearValueBinding::Black, TexCreate_ShaderResource | TexCreate_UAV);
 
 	FRDGTextureRef SnowVelocityTrackOutput = GraphBuilder.CreateTexture(Desc, TEXT("SnowVelocityTrackOutput"));
 	FRDGTextureUAVRef SnowVelocityTrackOutputUAV = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(SnowVelocityTrackOutput,0));
@@ -132,7 +193,7 @@ void FSnowAddTrackPass::AddVelocityPass(FRDGBuilder& GraphBuilder,
 	SnowInteractiveAddTrackParameters->VelocityFadeSpeed = RenderData->VelocityFadeSpeed;
 	SnowInteractiveAddTrackParameters->DeltaTime = RenderData->DeltaTime;
 
-	auto GroupCount = FIntVector(RenderData->SizeX / FSnowInteractiveRenderData::ThreadX, RenderData->SizeY / FSnowInteractiveRenderData::ThreadY, 1);
+	const FIntVector GroupCount = FSnowInteractiveRenderData::GetGroupCount(Desc.Extent);
 	GraphBuilder.AddPass(
 	RDG_EVENT_NAME("SnowInteractiveAddVelocityTrackComputeShader"),
 	SnowInteractiveAddTrackParameters,
@@ -142,6 +203,7 @@ void FSnowAddTrackPass::AddVelocityPass(FRDGBuilder& GraphBuilder,
 		FComputeShaderUtils::Dispatch(RHICmdList, SnowInteractiveAddTrackComputeShader, *SnowInteractiveAddTrackParameters,GroupCount);
 	});
 
+	
 	AddCopyTexturePass(GraphBuilder, SnowVelocityTrackOutput, SnowVelocityTrackInput, FRHICopyTextureInfo());
 }
 
@@ -151,4 +213,67 @@ void FSnowAddTrackPass::DrawVelocity(FRHICommandListImmediate& RHICommandList,
 	FRDGBuilder GraphBuilder(RHICommandList);
 	AddVelocityPass(GraphBuilder, RenderData);
 	GraphBuilder.Execute();
+}
+
+void FSnowAddTrackPass::AddVelocityTrackPass(FRDGBuilder& GraphBuilder, const FSnowInteractiveRenderData* RenderData)
+{
+	if (!RenderData->SnowVelocityInputData || !RenderData->SnowVelocityTrackData)
+	{
+		return;
+	}
+
+	FRDGTextureRef SnowVelocityInput = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityInputData->GetRenderTargetTexture(), TEXT("SnowVelocityInput"));
+	FRDGTextureRef VelocityTrack = RegisterExternalTexture(GraphBuilder, RenderData->SnowVelocityTrackData->GetRenderTargetTexture(), TEXT("SnowVelocityTrack"));
+
+	const FRDGTextureDesc Desc = FRDGTextureDesc::Create2D(
+		VelocityTrack->Desc.Extent,
+		VelocityTrack->Desc.Format,
+		FClearValueBinding::Black, TexCreate_ShaderResource | TexCreate_UAV);
+	FRDGTextureRef VelocityTrackResult = GraphBuilder.CreateTexture(Desc, TEXT("SnowVelocityTrackResult"));
+
+	const FIntVector GroupCount(
+		FMath::DivideAndRoundUp<int32>(Desc.Extent.X, FSnowInteractiveRenderData::ThreadX),
+		FMath::DivideAndRoundUp<int32>(Desc.Extent.Y, FSnowInteractiveRenderData::ThreadY),
+		1);
+
+	// 高斯权重 exp(-k·d²)：在 R+1 处衰减到 exp(-4.6·FalloffPow)(FalloffPow=1 时约 0.01)，
+	// FalloffPow 越大边缘越软越窄，与旧参数语义一致
+	const int32 DilateRadius = FMath::Max(RenderData->VelocityTrackDilateRadius, 0);
+	const float DilateFalloff = 4.6f * RenderData->VelocityTrackDilateFalloffPow / FMath::Square(static_cast<float>(DilateRadius + 1));
+
+	// 1. 横向膨胀
+	FRDGTextureRef DilateA = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(
+		Desc.Extent, PF_FloatRGBA, FClearValueBinding::Black, TexCreate_ShaderResource | TexCreate_UAV), TEXT("SnowVelocityTrackDilateA"));
+	FRDGTextureRef DilateB = GraphBuilder.CreateTexture(FRDGTextureDesc::Create2D(
+		Desc.Extent, PF_R16F, FClearValueBinding::Black, TexCreate_ShaderResource | TexCreate_UAV), TEXT("SnowVelocityTrackDilateB"));
+	{
+		FSnowInteractiveDilateVelocityTrackHCS::FParameters* Parameters = GraphBuilder.AllocParameters<FSnowInteractiveDilateVelocityTrackHCS::FParameters>();
+		Parameters->SnowVelocityInput = SnowVelocityInput;
+		Parameters->DilateHOutputA = GraphBuilder.CreateUAV(DilateA);
+		Parameters->DilateHOutputB = GraphBuilder.CreateUAV(DilateB);
+		Parameters->DilateRadius = DilateRadius;
+		Parameters->DilateFalloff = DilateFalloff;
+		Parameters->TimerMinSpeed = RenderData->VelocityTrackTimerMinSpeed;
+
+		TShaderMapRef<FSnowInteractiveDilateVelocityTrackHCS> ComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
+		FComputeShaderUtils::AddPass(GraphBuilder, RDG_EVENT_NAME("SnowDilateVelocityTrackH"), ComputeShader, Parameters, GroupCount);
+	}
+
+	// 2. 纵向膨胀 + 累积
+	FSnowInteractiveAccumulateVelocityTrackCS::FParameters* Parameters = GraphBuilder.AllocParameters<FSnowInteractiveAccumulateVelocityTrackCS::FParameters>();
+	Parameters->DilateHInputA = DilateA;
+	Parameters->DilateHInputB = DilateB;
+	Parameters->VelocityTrackHistory = VelocityTrack;
+	Parameters->VelocityTrackResult = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(VelocityTrackResult,0));
+	Parameters->VelocityTrackFadeSpeed = RenderData->VelocityTrackFadeSpeed;
+	Parameters->DeltaTime = RenderData->DeltaTime;
+	Parameters->DilateRadius = DilateRadius;
+	Parameters->DilateFalloff = DilateFalloff;
+	Parameters->TimerInvLifetime = 1.f / FMath::Max(RenderData->VelocityTrackLifetime, KINDA_SMALL_NUMBER);
+	Parameters->TimerContactThreshold = RenderData->VelocityTrackTimerContactThreshold;
+
+	TShaderMapRef<FSnowInteractiveAccumulateVelocityTrackCS> ComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
+	FComputeShaderUtils::AddPass(GraphBuilder, RDG_EVENT_NAME("SnowAccumulateVelocityTrack"), ComputeShader, Parameters, GroupCount);
+
+	AddCopyTexturePass(GraphBuilder, VelocityTrackResult, VelocityTrack, FRHICopyTextureInfo());
 }

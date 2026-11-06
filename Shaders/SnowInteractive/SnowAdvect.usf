@@ -1,51 +1,51 @@
 #include "/Engine/Private/Common.ush"
 
-Texture2D SnowDiffusionInput;
+// 半拉格朗日平流
+// 速度纹理存的是世界空间 m/s，VelocityToTexel 负责换算到 texel/s 并翻转 Y
+Texture2D<float4> SnowDiffusionInput;
 RWTexture2D<float4> SnowAdvectOutput;
+int2 TextureSize;
+float2 VelocityToTexel;
 float DeltaTime;
-float TexSize;
 float Viscosity;
+
+static const float MaxStepTexel = 4.0;
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void SnowAdvectCS(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
+	int2 Pos = int2(DispatchThreadId.xy);
+	if (any(Pos >= TextureSize))
+	{
+		return;
+	}
 
-	float2 Pos = (float2)DispatchThreadId.xy + 0.5;
+	float2 V0 = SnowDiffusionInput.Load(int3(Pos, 0)).xy;
 
-	float2 V0 = SnowDiffusionInput.Load(int3(DispatchThreadId.xy, 0)).xy;
-
-	float DT0 = DeltaTime * TexSize;
-
-	float2 Step = V0 * DT0;
-	const float MaxStep = 4;
+	float2 Step = V0 * VelocityToTexel * DeltaTime;
 	float StepLen = length(Step);
-	if(StepLen > MaxStep) Step *= MaxStep / StepLen;
+	if (StepLen > MaxStepTexel)
+	{
+		Step *= MaxStepTexel / StepLen;
+	}
 
+	const float2 Size = (float2)TextureSize;
+	float2 Back = (float2)Pos + 0.5 - Step;
+	Back = clamp(Back, 0.5, Size - 0.5);
 
-	float2 Back = Pos - Step;
-	Back = clamp(Back,0.5,TexSize - 0.5);
+	float2 BackTexel = Back - 0.5;
+	int2 I0 = (int2)floor(BackTexel);
+	float2 F = BackTexel - (float2)I0;
+	int2 I1 = min(I0 + 1, TextureSize - 1);
+	I0 = clamp(I0, 0, TextureSize - 1);
 
-	int2 I0 = (int2)floor(Back-0.5);
-	int2 I1 = I0 + 1;
-	I0 = clamp(I0, int2(0,0), int2(TexSize-1, TexSize-1));
-	I1 = clamp(I1, int2(0,0), int2(TexSize-1, TexSize-1));
-	float2 F = (Back - 0.5) - (float2)I0;
-
-	float2 V00 = SnowDiffusionInput.Load(int3(I0.x,	I0.y,0)).xy;
+	float2 V00 = SnowDiffusionInput.Load(int3(I0.x, I0.y, 0)).xy;
 	float2 V10 = SnowDiffusionInput.Load(int3(I1.x, I0.y, 0)).xy;
 	float2 V01 = SnowDiffusionInput.Load(int3(I0.x, I1.y, 0)).xy;
 	float2 V11 = SnowDiffusionInput.Load(int3(I1.x, I1.y, 0)).xy;
 
-	float2 Vx0 = lerp(V00, V10, F.x);
-	float2 Vx1 = lerp(V01, V11, F.x);
-	float2 V = lerp(Vx0, Vx1, F.y);
+	float2 V = lerp(lerp(V00, V10, F.x), lerp(V01, V11, F.x), F.y);
+	V *= exp(-Viscosity * DeltaTime);
 
-	//float A = Viscosity * DeltaTime;
-	//V.x = V.x>0 ? max(V.x - A, 0) : min(V.x + A, 0);
-	//V.y = V.y>0 ? max(V.y - A, 0) : min(V.y + A, 0);
-	float Damp = saturate(1 - Viscosity * DeltaTime);
-	V *= Damp;
-	//V.xy =  select(abs(V.xy) < 1e-3, float2(0,0), V.xy);
-
-	SnowAdvectOutput[DispatchThreadId.xy] = float4(V,0,1);
+	SnowAdvectOutput[Pos] = float4(V, 0, 1);
 }

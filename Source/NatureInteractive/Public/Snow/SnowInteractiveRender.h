@@ -4,6 +4,7 @@
 #include "SnowOffsetPass.h"
 
 class FRDGBuilder;
+class FSnowQuicksandPass;
 class FSnowProjectPass;
 class FSnowAdvectPass;
 class FSnowDiffusionPass;
@@ -23,6 +24,8 @@ public:
 	void Draw(FRHICommandListImmediate& RHICommandList, const FSnowInteractiveRenderData* RenderData) const;
 
 	bool bRenderDiffusionData = false;
+	bool bRenderQuicksand = false;
+	bool bRenderVelocityTrack = false;
 
 	TPimplPtr<FSnowAddTrackPass> AddTrackPass;
 	TPimplPtr<FSnowOffsetPass> OffsetPass;
@@ -32,4 +35,5 @@ public:
 	TPimplPtr<FSnowDiffusionPass> DiffusionPass;
 	TPimplPtr<FSnowAdvectPass> AdvectPass;
 	TPimplPtr<FSnowProjectPass> ProjectPass;
+	TPimplPtr<FSnowQuicksandPass> QuicksandPass;
 };

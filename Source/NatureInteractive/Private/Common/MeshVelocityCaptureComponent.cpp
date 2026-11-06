@@ -56,10 +56,38 @@ void UMeshVelocityCaptureComponent::SetRenderTarget(UTextureRenderTarget2D* Rend
 void UMeshVelocityCaptureComponent::CaptureMeshVelocity(const UCameraComponent* Camera,
                                                         const TArray<UMeshComponent*>& Meshes, TArray<FMeshVelocityRecord>& InOutRecords, float DeltaTime)
 {
-	ACustomDataCapture* CustomDataCapture = Cast<ACustomDataCapture>(GetOwner());
-	if (!CustomDataCapture)
+	if (CollectContactBodies(Meshes, InOutRecords, DeltaTime))
 	{
-		return;
+		MeshVelocityRender->Render(VelocityRenderData);
+	}
+}
+
+TFunction<void(FRDGBuilder&)> UMeshVelocityCaptureComponent::BuildMeshVelocityPassCallback(
+	const TArray<UMeshComponent*>& Meshes, TArray<FMeshVelocityRecord>& InOutRecords, float DeltaTime)
+{
+	if (!CollectContactBodies(Meshes, InOutRecords, DeltaTime))
+	{
+		return nullptr;
+	}
+
+	const FMeshVelocityRenderData RenderDataSnapshot = VelocityRenderData;
+	const FMeshVelocityRender* VelocityRenderer = MeshVelocityRender.Get();
+	return [RenderDataSnapshot, VelocityRenderer](FRDGBuilder& GraphBuilder)
+	{
+		if (VelocityRenderer)
+		{
+			VelocityRenderer->AddPasses(GraphBuilder, &RenderDataSnapshot);
+		}
+	};
+}
+
+bool UMeshVelocityCaptureComponent::CollectContactBodies(const TArray<UMeshComponent*>& Meshes,
+	TArray<FMeshVelocityRecord>& InOutRecords, float DeltaTime)
+{
+	ACustomDataCapture* CustomDataCapture = Cast<ACustomDataCapture>(GetOwner());
+	if (!CustomDataCapture || !VelocityRenderTarget)
+	{
+		return false;
 	}
 	
 	VelocityRenderData.InitRenderData(*this);
@@ -74,6 +102,10 @@ void UMeshVelocityCaptureComponent::CaptureMeshVelocity(const UCameraComponent* 
 	
 	for (UMeshComponent* Mesh : Meshes)
 	{
+		if (!Mesh)
+		{
+			continue;
+		}
 		FMeshVelocityRecord& Record = CustomDataCapture->FindOrAddMeshVelocityRecord(InOutRecords, Mesh);
 		const FVector CurrentLocation = Mesh->GetComponentLocation();
 		
@@ -87,16 +119,27 @@ void UMeshVelocityCaptureComponent::CaptureMeshVelocity(const UCameraComponent* 
 			LinearVelocity = (CurrentLocation - Record.PrevLocation) / DeltaTime;
 		}
 		
-		const FBoxSphereBounds LocalBounds = Mesh->Bounds;
-		const FVector Pad(ExtraPadding);
-		const FVector WorldMin = LocalBounds.Origin - LocalBounds.BoxExtent - Pad;
-		const FVector WorldMax = LocalBounds.Origin + LocalBounds.BoxExtent + Pad;
+		const FBoxSphereBounds& MeshBounds = Mesh->Bounds;
+		// 只在这里计算写入/匹配范围，不改动 Mesh 实际 Bounds
+		const float XYPad = bWriteVelocityByBounds ? VelocityBoundsExpand : ExtraPadding;
+		const FVector2f HalfXY(
+			FMath::Max(static_cast<float>(MeshBounds.BoxExtent.X) + XYPad, 0.f),
+			FMath::Max(static_cast<float>(MeshBounds.BoxExtent.Y) + XYPad, 0.f));
+		const FVector2f CenterXY(MeshBounds.Origin.X, MeshBounds.Origin.Y);
 		
-		FVector2f XYMin(WorldMin.X, WorldMin.Y);
-		FVector2f XYMax(WorldMax.X, WorldMax.Y);
+		const FVector2f XYMin = CenterXY - HalfXY;
+		const FVector2f XYMax = CenterXY + HalfXY;
 		
+		// 包围盒模式：用包围盒底部高度判断是否接触，离地(Force=0)的物体不写入
+		float BodyForce = 1.f;
+		if (bWriteVelocityByBounds)
+		{
+			const float BoundsMinZ = static_cast<float>(MeshBounds.Origin.Z - MeshBounds.BoxExtent.Z);
+			BodyForce = FMath::Clamp((InteractiveHeight - BoundsMinZ) / FMath::Max(InteractiveDistance, KINDA_SMALL_NUMBER), 0.f, 1.f);
+		}
 		
-		if (XYMax.X<ViewMin.X || XYMin.X>ViewMax.X || XYMax.Y<ViewMin.Y || XYMin.Y>ViewMax.Y)
+		if (BodyForce <= 0.f || HalfXY.X <= 0.f || HalfXY.Y <= 0.f ||
+			XYMax.X<ViewMin.X || XYMin.X>ViewMax.X || XYMax.Y<ViewMin.Y || XYMin.Y>ViewMax.Y)
 		{
 			Record.PrevLocation = CurrentLocation;
 			Record.PrevRotation = Mesh->GetComponentQuat();
@@ -106,7 +149,8 @@ void UMeshVelocityCaptureComponent::CaptureMeshVelocity(const UCameraComponent* 
 		FMeshVelocityContactBody ContactBody;
 		ContactBody.WorldMin = XYMin;
 		ContactBody.WorldMax = XYMax;
-		ContactBody.LinearVelocity = FVector2f(LinearVelocity.X,LinearVelocity.Y) * 0.01f;
+		ContactBody.LinearVelocity = FVector2f(LinearVelocity.X,LinearVelocity.Y) * FMeshVelocityRenderData::VelocityScale;
+		ContactBody.Pad = FVector2f(BodyForce, 0.f);
 		
 		
 		VelocityRenderData.ContactBodies.Add(ContactBody);
@@ -114,10 +158,7 @@ void UMeshVelocityCaptureComponent::CaptureMeshVelocity(const UCameraComponent* 
 		Record.PrevLocation = CurrentLocation;
 		Record.PrevRotation = Mesh->GetComponentQuat();
 	}
-	
-	
-	MeshVelocityRender->Render(VelocityRenderData);
-	
+	return true;
 }
 
 UTextureRenderTarget2D* UMeshVelocityCaptureComponent::GetVelocityRenderTarget() const

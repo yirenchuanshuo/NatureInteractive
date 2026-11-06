@@ -11,6 +11,11 @@ class FMeshVelocityRasterizeCS : public FGlobalShader
 {
 	DECLARE_SHADER_TYPE(FMeshVelocityRasterizeCS, Global);
 	SHADER_USE_PARAMETER_STRUCT(FMeshVelocityRasterizeCS, FGlobalShader);
+	
+	// 静态开关：1 = 按接触体包围盒范围整块写入速度(不读深度)
+	class FWriteByBoundsDim : SHADER_PERMUTATION_BOOL("MESH_VELOCITY_WRITE_BY_BOUNDS");
+	using FPermutationDomain = TShaderPermutationDomain<FWriteByBoundsDim>;
+	
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float>, DepthInput)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, VelocityOutput)
@@ -41,24 +46,36 @@ IMPLEMENT_SHADER_TYPE(,FMeshVelocityRasterizeCS, TEXT("/Plugin/NatureInteractive
 
 void FMeshVelocityRasterizePass::Draw(FRHICommandListImmediate& RHICommandList,const FMeshVelocityRenderData* RenderData)
 {
-	
-	FTextureRHIRef DepthRHI    = RenderData->DepthInput->GetRenderTargetTexture();
+	FRDGBuilder GraphBuilder(RHICommandList);
+	AddPass(GraphBuilder, RenderData);
+	GraphBuilder.Execute();
+}
+
+void FMeshVelocityRasterizePass::AddPass(FRDGBuilder& GraphBuilder, const FMeshVelocityRenderData* RenderData)
+{
+	if (!RenderData || !RenderData->DepthInput || !RenderData->VelocityOutput)
+	{
+		return;
+	}
+
 	FTextureRHIRef VelocityRHI = RenderData->VelocityOutput->GetRenderTargetTexture();
 	checkf(VelocityRHI, TEXT("Velocity RT RHI not ready"));
 	checkf(EnumHasAnyFlags(VelocityRHI->GetDesc().Flags, TexCreate_UAV),
 		TEXT("Velocity RT %s missing TexCreate_UAV (bSupportsUAV not applied?)"),
 		*VelocityRHI->GetName().ToString());
 	
-	FRDGBuilder GraphBuilder(RHICommandList);
-	
 	FRDGTextureRef DepthInput = RegisterExternalTexture(GraphBuilder, RenderData->DepthInput->GetRenderTargetTexture(), TEXT("MeshVelocityDepthInput"));
 	FRDGTextureRef VelocityOutput = RegisterExternalTexture(GraphBuilder, RenderData->VelocityOutput->GetRenderTargetTexture(), TEXT("MeshVelocityOutput"));
 	FRDGTextureUAVRef VelocityOutputUAV = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(VelocityOutput,0));
 	
-	FRDGBufferRef ContactBodyBuffer = CreateStructuredBuffer(GraphBuilder, TEXT("MeshVelocityContactBodyBuffer"), RenderData->ContactBodies);
+	FRDGBufferRef ContactBodyBuffer = RenderData->ContactBodies.Num() > 0
+		? CreateStructuredBuffer(GraphBuilder, TEXT("MeshVelocityContactBodyBuffer"), RenderData->ContactBodies)
+		: CreateStructuredBuffer(GraphBuilder, TEXT("MeshVelocityContactBodyBuffer"), TArray<FMeshVelocityContactBody>{ FMeshVelocityContactBody() });
 	FRDGBufferSRVRef ContactBodyBufferSRV = GraphBuilder.CreateSRV(ContactBodyBuffer);
 	
-	TShaderMapRef<FMeshVelocityRasterizeCS> MeshVelocityRasterizeComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel));
+	FMeshVelocityRasterizeCS::FPermutationDomain PermutationVector;
+	PermutationVector.Set<FMeshVelocityRasterizeCS::FWriteByBoundsDim>(RenderData->bWriteByBounds);
+	TShaderMapRef<FMeshVelocityRasterizeCS> MeshVelocityRasterizeComputeShader(GetGlobalShaderMap(RenderData->FeatureLevel), PermutationVector);
 	FMeshVelocityRasterizeCS::FParameters* MeshVelocityRasterizeParameters = GraphBuilder.AllocParameters<FMeshVelocityRasterizeCS::FParameters>();
 	MeshVelocityRasterizeParameters->DepthInput = DepthInput;
 	MeshVelocityRasterizeParameters->VelocityOutput = VelocityOutputUAV;
@@ -82,6 +99,4 @@ void FMeshVelocityRasterizePass::Draw(FRHICommandListImmediate& RHICommandList,c
 	{	
 		FComputeShaderUtils::Dispatch(RHICmdList, MeshVelocityRasterizeComputeShader, *MeshVelocityRasterizeParameters,GroupCount);
 	});
-	
-	GraphBuilder.Execute();
 }

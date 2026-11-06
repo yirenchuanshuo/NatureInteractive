@@ -36,4 +36,5 @@ void FMeshVelocityRenderData::InitRenderData(const UMeshVelocityCaptureComponent
 	
 	InteractiveHeight = CaptureComponent.InteractiveHeight;
 	InteractiveDistance = CaptureComponent.InteractiveDistance;
+	bWriteByBounds = CaptureComponent.bWriteVelocityByBounds;
 }
