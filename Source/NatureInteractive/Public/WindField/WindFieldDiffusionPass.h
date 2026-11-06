@@ -8,7 +8,5 @@ class FRDGBuilder;
 class WindFieldDiffusionPass
 {
 public:
-	void AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData, FWindFieldRDGVelocity& VelocityInOut);
-
-	void Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData);
+	void AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData, FWindFieldRDGChannels& ChannelsInOut);
 };

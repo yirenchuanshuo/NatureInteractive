@@ -1,6 +1,7 @@
 #include "WindField/WindFieldRender.h"
 #include "WindField/FWindMotorRenderData.h"
 #include "WindField/WindFieldRenderData.h"
+#include "WindField/WindMotorComponent.h"
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 
@@ -17,57 +18,160 @@ WindFieldRender::WindFieldRender()
 
 void WindFieldRender::Render(const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const
 {
+	// Snapshot everything on the calling (game) thread. The caller mutates both RenderData and the
+	// motor map immediately after this returns (UpdatePreviousRenderData / UpdatePreviousData, plus
+	// Register/UnregisterWindMotor at arbitrary times), so capturing them by reference was a data
+	// race and could make the render thread walk a TMap that is being rehashed.
+	if (!RenderData.HasValidResources())
+	{
+		return;
+	}
+
+	FWindFieldRenderData RenderDataCopy = RenderData;
+	TArray<FWindMotorRenderData> WindMotorRenderDatas;
+	WindMotorRenderDataManager.WindMotorRenderDatasMap.GenerateValueArray(WindMotorRenderDatas);
+
+	// Everything that can force a cell's duration back to 0 this frame. Both lists are culled against
+	// the field's current bounds so out-of-range requests never reach the GPU. The test is
+	// sphere/box (closest point on the box) rather than "centre inside box", so a sphere whose centre
+	// is just outside the edge still reaches the border cells it overlaps.
+	const FVector3f HalfSize = RenderData.WindFieldSize * 0.5f;
+	const FVector3f BoxMin = RenderData.WindFieldWorldPosition - HalfSize;
+	const FVector3f BoxMax = RenderData.WindFieldWorldPosition + HalfSize;
+	auto SphereTouchesField = [&BoxMin, &BoxMax](const FVector3f& Centre, float RadiusSq)
+	{
+		const FVector3f Closest(
+			FMath::Clamp(Centre.X, BoxMin.X, BoxMax.X),
+			FMath::Clamp(Centre.Y, BoxMin.Y, BoxMax.Y),
+			FMath::Clamp(Centre.Z, BoxMin.Z, BoxMax.Z));
+		return FVector3f::DistSquared(Centre, Closest) <= RadiusSq;
+	};
+
+	FWindFieldDurationResetInputs DurationResetInputs;
+
+	// 1) One-shot requests (motor registered / Blueprint reset).
+	if (WindMotorRenderDataManager.PendingDurationResets.Num() > 0)
+	{
+		DurationResetInputs.Spheres.Reserve(WindMotorRenderDataManager.PendingDurationResets.Num());
+		for (const FVector4f& Sphere : WindMotorRenderDataManager.PendingDurationResets)
+		{
+			if (SphereTouchesField(FVector3f(Sphere.X, Sphere.Y, Sphere.Z), Sphere.W))
+			{
+				DurationResetInputs.Spheres.Add(Sphere);
+			}
+		}
+	}
+
+	// 2) Moving motors: the shader resets cells that are inside the sphere now but were not last
+	// frame. A motor that did not move cannot produce such a cell, so stationary motors are skipped
+	// here and cost nothing on the GPU. Only the current sphere needs to touch the field, since the
+	// cells being entered are by definition inside it.
+	// SetTickData has already refreshed WorldPosition and UpdatePreviousData has not run yet, so the
+	// pair below is exactly "last frame -> this frame".
+	for (const TPair<UWindMotorComponent*, FWindMotorRenderData>& MotorPair : WindMotorRenderDataManager.WindMotorRenderDatasMap)
+	{
+		const UWindMotorComponent* MotorComponent = MotorPair.Key;
+		if (!IsValid(MotorComponent) || !MotorComponent->bResetDurationOnEnter)
+		{
+			continue;
+		}
+
+		const FWindMotorRenderData& Motor = MotorPair.Value;
+		if (!(Motor.Radius > 0.0f)
+			|| FVector3f::DistSquared(Motor.WorldPosition, Motor.PreviousWorldPosition) <= KINDA_SMALL_NUMBER)
+		{
+			continue;
+		}
+
+		const float RadiusSq = Motor.Radius * Motor.Radius;
+		if (!SphereTouchesField(Motor.WorldPosition, RadiusSq))
+		{
+			continue;
+		}
+
+		FWindMotorEntryData& Entry = DurationResetInputs.MotorEntries.AddDefaulted_GetRef();
+		Entry.WorldPosition = Motor.WorldPosition;
+		Entry.RadiusSq = RadiusSq;
+		Entry.PreviousWorldPosition = Motor.PreviousWorldPosition;
+	}
+
 	if(IsInRenderingThread())
 	{
 		FRHICommandListImmediate& RHICmdList = GetImmediateCommandList_ForRenderCommand();
-		Draw(RHICmdList,RenderData,WindMotorRenderDataManager);
+		Draw(RHICmdList,RenderDataCopy,WindMotorRenderDatas,DurationResetInputs);
 	}
 	else
 	{
-		ENQUEUE_RENDER_COMMAND(OceanRenderHZeroTextureCommand)(
-	[&RenderData,&WindMotorRenderDataManager,this](FRHICommandListImmediate& RHICmdList)
+		ENQUEUE_RENDER_COMMAND(WindFieldRenderCommand)(
+		[this, RenderDataCopy = MoveTemp(RenderDataCopy), WindMotorRenderDatas = MoveTemp(WindMotorRenderDatas),
+			DurationResetInputs = MoveTemp(DurationResetInputs)]
+		(FRHICommandListImmediate& RHICmdList)
 		{
-			Draw(RHICmdList,RenderData,WindMotorRenderDataManager);
+			Draw(RHICmdList,RenderDataCopy,WindMotorRenderDatas,DurationResetInputs);
 		});
 	}
 }
 
-void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData,const FWindMotorRenderDataManager& WindMotorRenderDataManager)const
+void WindFieldRender::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& RenderData,
+	const TArray<FWindMotorRenderData>& WindMotorRenderDatas,const FWindFieldDurationResetInputs& DurationResetInputs)const
 {
-	// One FRDGBuilder for the whole wind-field frame. All passes are recorded, and a
-	// single Execute() at the end lets RDG schedule barriers and async compute together.
+	// One FRDGBuilder for the whole wind-field frame; a single Execute() at the end lets RDG
+	// schedule all barriers together.
+	//
+	// Queue choice: every pass below runs on the graphics queue (ERDGPassFlags::Compute).
+	// The chain Offset -> AddSource -> Diffusion -> Advect -> Project -> Export is strictly
+	// sequential (the duration channel flows straight from Offset to Export). Each pass consumes the
+	// previous pass's output, so moving it to the async
+	// compute queue buys no overlap whatsoever. It only costs cross-queue fences: one to fork off
+	// the graphics queue (the inputs are external render targets owned by it), one to join back
+	// before the final copies, plus a join wherever a pass in the middle is not async. At this
+	// workload size (a 32x32x16 grid, ~25 dispatches of a few microseconds each) that
+	// synchronisation is a significant fraction of the total cost.
+	//
+	// Async compute is only worth it when this work can overlap with unrelated graphics work
+	// (e.g. running it alongside shadow map rendering). Doing that properly means marking the
+	// whole chain AsyncCompute and letting it span a large portion of the frame, not fencing
+	// in and out of it every pass.
 	FRDGBuilder GraphBuilder(RHICommandList);
 
-	// Register the persistent 3D velocity render targets as RDG textures and use them as
-	// the initial input for the pass chain. Each pass replaces the entries in Velocity
-	// with its freshly-produced RDG textures.
+	// Register the persistent 3D render targets (three velocity channels plus the duration
+	// accumulator) as RDG textures and use them as the initial input for the pass chain. Each pass
+	// replaces the entries in Channels with its freshly-produced RDG textures.
 	FRDGTextureRef VelXPersistent = RegisterExternalTexture(GraphBuilder, RenderData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldChannel_R1"));
 	FRDGTextureRef VelYPersistent = RegisterExternalTexture(GraphBuilder, RenderData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldChannel_G1"));
 	FRDGTextureRef VelZPersistent = RegisterExternalTexture(GraphBuilder, RenderData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldChannel_B1"));
+	// Last frame's per-cell wind duration accumulator.
+	FRDGTextureRef DurationPersistent = RegisterExternalTexture(GraphBuilder, RenderData.WindFieldChannel_A1->GetRenderTargetTexture(), TEXT("WindFieldChannel_A1"));
 
-	FWindFieldRDGVelocity Velocity;
-	Velocity.X = VelXPersistent;
-	Velocity.Y = VelYPersistent;
-	Velocity.Z = VelZPersistent;
+	FWindFieldRDGChannels Channels;
+	Channels.X = VelXPersistent;
+	Channels.Y = VelYPersistent;
+	Channels.Z = VelZPersistent;
+	Channels.Duration = DurationPersistent;
 
-	OffsetPass->AddPass(GraphBuilder, RenderData, Velocity);
+	// Offset shifts all four channels together so the duration stays aligned with the velocity.
+	OffsetPass->AddPass(GraphBuilder, RenderData, Channels);
 
-	if (WindMotorRenderDataManager.WindMotorRenderDatasMap.Num() > 0)
+	if (WindMotorRenderDatas.Num() > 0)
 	{
-		AddSourcePass->AddPass(GraphBuilder, RenderData, WindMotorRenderDataManager, Velocity);
+		AddSourcePass->AddPass(GraphBuilder, RenderData, WindMotorRenderDatas, Channels);
 	}
 
-	DiffusionPass->AddPass(GraphBuilder, RenderData, Velocity);
-	AdvectPass->AddPass(GraphBuilder, RenderData, Velocity);
-	ProjectPass->AddPass(GraphBuilder, RenderData, Velocity);
-	ExportDataPass->AddPass(GraphBuilder, RenderData, Velocity);
+	// The duration channel is deliberately not touched between Offset and ExportData: it is a local
+	// per-cell timer, so it must not be diffused or advected with the flow.
+	DiffusionPass->AddPass(GraphBuilder, RenderData, Channels);
+	AdvectPass->AddPass(GraphBuilder, RenderData, Channels);
+	ProjectPass->AddPass(GraphBuilder, RenderData, Channels);
+	ExportDataPass->AddPass(GraphBuilder, RenderData, DurationResetInputs, Channels);
 
-	// Persist the final velocity back to WindFieldChannel_R1/G1/B1 for the next frame's input.
+	// Persist the final velocity back to WindFieldChannel_R1/G1/B1 and the updated accumulator back
+	// to WindFieldChannel_A1 for the next frame's input.
 	FRHICopyTextureInfo CopyInfo;
 	CopyInfo.Size = FIntVector(RenderData.SizeX, RenderData.SizeY, RenderData.SizeZ);
-	AddCopyTexturePass(GraphBuilder, Velocity.X, VelXPersistent, CopyInfo);
-	AddCopyTexturePass(GraphBuilder, Velocity.Y, VelYPersistent, CopyInfo);
-	AddCopyTexturePass(GraphBuilder, Velocity.Z, VelZPersistent, CopyInfo);
+	AddCopyTexturePass(GraphBuilder, Channels.X, VelXPersistent, CopyInfo);
+	AddCopyTexturePass(GraphBuilder, Channels.Y, VelYPersistent, CopyInfo);
+	AddCopyTexturePass(GraphBuilder, Channels.Z, VelZPersistent, CopyInfo);
+	AddCopyTexturePass(GraphBuilder, Channels.Duration, DurationPersistent, CopyInfo);
 
 	GraphBuilder.Execute();
 }

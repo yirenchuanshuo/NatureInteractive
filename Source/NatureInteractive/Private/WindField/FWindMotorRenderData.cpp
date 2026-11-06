@@ -17,18 +17,37 @@ void FWindMotorRenderDataManager::InitMotorData(UWindMotorComponent* WindMotorCo
 	FWindMotorRenderData WindMotorData;
 	WindMotorData.Radius = WindMotorComponent->Radius;
 	WindMotorData.Strength = WindMotorComponent->Strength;
+	WindMotorData.DragScale = WindMotorComponent->DragScale;
 	WindMotorData.WorldPosition = FVector3f(WindMotorComponent->GetComponentLocation());
 	WindMotorData.PreviousWorldPosition = WindMotorData.WorldPosition;
 	WindMotorData.MoveVelocity = FVector3f(0,0,0);
 	WindMotorRenderDatasMap.Add(WindMotorComponent,WindMotorData);
 }
 
-void FWindMotorRenderDataManager::SetTickData()
+void FWindMotorRenderDataManager::SetTickData(float DeltaTime)
 {
+	const float InvDeltaTime = DeltaTime > KINDA_SMALL_NUMBER ? 1.0f / DeltaTime : 0.0f;
+
 	for(auto& MotorData : WindMotorRenderDatasMap)
 	{
+		// Refresh the authored values too, otherwise Radius/Strength/DragScale would be frozen at
+		// whatever they were when the motor registered and could not be driven at runtime.
+		MotorData.Value.Radius = MotorData.Key->Radius;
+		MotorData.Value.Strength = MotorData.Key->Strength;
+		MotorData.Value.DragScale = MotorData.Key->DragScale;
+
 		MotorData.Value.WorldPosition = FVector3f(MotorData.Key->GetComponentLocation());
-		MotorData.Value.MoveVelocity = (MotorData.Value.WorldPosition - MotorData.Value.PreviousWorldPosition) / UintSize;
+		// cm/s, matching the unit convention of the velocity textures.
+		FVector3f Velocity =
+			(MotorData.Value.WorldPosition - MotorData.Value.PreviousWorldPosition) * InvDeltaTime;
+
+		// Clamp so a teleport cannot inject an unbounded (or inf) spike into the field.
+		const float Speed = Velocity.Size();
+		if (Speed > MaxMotorSpeed)
+		{
+			Velocity *= MaxMotorSpeed / Speed;
+		}
+		MotorData.Value.MoveVelocity = Velocity;
 	}
 }
 
@@ -43,4 +62,33 @@ void FWindMotorRenderDataManager::UpdatePreviousData()
 void FWindMotorRenderDataManager::RemoveMotorData(const UWindMotorComponent* WindMotorComponent)
 {
 	WindMotorRenderDatasMap.Remove(WindMotorComponent);
+}
+
+void FWindMotorRenderDataManager::QueueDurationReset(const FVector3f& Center, float Radius)
+{
+	// A zero/negative radius covers no cell; also rejects NaN since the comparison fails for it.
+	if (!(Radius > 0.0f))
+	{
+		return;
+	}
+
+	if (PendingDurationResets.Num() >= MaxPendingDurationResets)
+	{
+		if (!bWarnedDurationResetOverflow)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("FWindMotorRenderDataManager: more than %d wind duration reset requests pending; dropping the oldest. ")
+				TEXT("Is the wind field ticking?"), MaxPendingDurationResets);
+			bWarnedDurationResetOverflow = true;
+		}
+		PendingDurationResets.RemoveAt(0, 1, EAllowShrinking::No);
+	}
+
+	PendingDurationResets.Add(FVector4f(Center.X, Center.Y, Center.Z, Radius * Radius));
+}
+
+void FWindMotorRenderDataManager::ClearPendingDurationResets()
+{
+	PendingDurationResets.Reset();
+	bWarnedDurationResetOverflow = false;
 }

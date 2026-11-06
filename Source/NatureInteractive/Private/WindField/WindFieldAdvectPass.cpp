@@ -18,7 +18,9 @@ class FWindFieldComputeShader_AdvectCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldAdvectY)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture3D, WindFieldAdvectZ)
 		SHADER_PARAMETER(FVector3f,NumCells)
+		SHADER_PARAMETER(FVector3f,CellSize)
 		SHADER_PARAMETER(float,DeltaTime)
+		SHADER_PARAMETER(float,DampingRate)
 	END_SHADER_PARAMETER_STRUCT()
 
 	public:
@@ -34,14 +36,14 @@ class FWindFieldComputeShader_AdvectCS : public FGlobalShader
 		OutEnvironment.SetDefine(TEXT("SIZE_Z"), ThreadZ);
 	}
 
-	static constexpr uint32 ThreadX = 8;
-	static constexpr uint32 ThreadY = 8;
-	static constexpr uint32 ThreadZ = 4;
+	static constexpr uint32 ThreadX = WindFieldThreadX;
+	static constexpr uint32 ThreadY = WindFieldThreadY;
+	static constexpr uint32 ThreadZ = WindFieldThreadZ;
 };
 IMPLEMENT_SHADER_TYPE(,FWindFieldComputeShader_AdvectCS, TEXT("/Plugin/NatureInteractive/WindField/WindFieldAdvect.usf"), TEXT("WindFieldAdvectCS"), SF_Compute);
 
 
-void WindFieldAdvectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData, FWindFieldRDGVelocity& VelocityInOut)
+void WindFieldAdvectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRenderData& SetupData, FWindFieldRDGChannels& ChannelsInOut)
 {
 	FRDGTextureDesc Desc(FRDGTextureDesc::Create3D(
 			FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ),
@@ -55,49 +57,28 @@ void WindFieldAdvectPass::AddPass(FRDGBuilder& GraphBuilder, const FWindFieldRen
 	TShaderMapRef<FWindFieldComputeShader_AdvectCS> WindFieldComputeShader(GetGlobalShaderMap(SetupData.FeatureLevel));
 	FWindFieldComputeShader_AdvectCS::FParameters* Params = GraphBuilder.AllocParameters<FWindFieldComputeShader_AdvectCS::FParameters>();
 
-	Params->WindFieldDiffusionX = VelocityInOut.X;
-	Params->WindFieldDiffusionY = VelocityInOut.Y;
-	Params->WindFieldDiffusionZ = VelocityInOut.Z;
+	Params->WindFieldDiffusionX = ChannelsInOut.X;
+	Params->WindFieldDiffusionY = ChannelsInOut.Y;
+	Params->WindFieldDiffusionZ = ChannelsInOut.Z;
 	Params->WindFieldAdvectX = GraphBuilder.CreateUAV(OutX);
 	Params->WindFieldAdvectY = GraphBuilder.CreateUAV(OutY);
 	Params->WindFieldAdvectZ = GraphBuilder.CreateUAV(OutZ);
 	Params->NumCells = FVector3f(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
+	Params->CellSize = SetupData.CellSize;
 	Params->DeltaTime = SetupData.DeltaTime;
+	Params->DampingRate = SetupData.DampingRate;
 
-	auto GroupCount = FIntVector(SetupData.SizeX / FWindFieldComputeShader_AdvectCS::ThreadX, SetupData.SizeY / FWindFieldComputeShader_AdvectCS::ThreadY, SetupData.SizeZ / FWindFieldComputeShader_AdvectCS::ThreadZ);
+	auto GroupCount = SetupData.GetGroupCount();
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("WindFieldAdvectComputeShader"),
 		Params,
-		ERDGPassFlags::AsyncCompute,
+		ERDGPassFlags::Compute,
 		[WindFieldComputeShader, Params, GroupCount](FRHIComputeCommandList& RHICmdList)
 		{
 			FComputeShaderUtils::Dispatch(RHICmdList, WindFieldComputeShader, *Params, GroupCount);
 		});
 
-	VelocityInOut.X = OutX;
-	VelocityInOut.Y = OutY;
-	VelocityInOut.Z = OutZ;
-}
-
-void WindFieldAdvectPass::Draw(FRHICommandListImmediate& RHICommandList,const FWindFieldRenderData& SetupData)
-{
-	FRDGBuilder GraphBuilder(RHICommandList);
-
-	FWindFieldRDGVelocity Velocity;
-	Velocity.X = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_R1->GetRenderTargetTexture(), TEXT("WindFieldDiffusionX"));
-	Velocity.Y = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_G1->GetRenderTargetTexture(), TEXT("WindFieldDiffusionY"));
-	Velocity.Z = RegisterExternalTexture(GraphBuilder, SetupData.WindFieldChannel_B1->GetRenderTargetTexture(), TEXT("WindFieldDiffusionZ"));
-
-	FRDGTextureRef InX = Velocity.X;
-	FRDGTextureRef InY = Velocity.Y;
-	FRDGTextureRef InZ = Velocity.Z;
-
-	AddPass(GraphBuilder, SetupData, Velocity);
-
-	FRHICopyTextureInfo CopyInfo;
-	CopyInfo.Size = FIntVector(SetupData.SizeX, SetupData.SizeY, SetupData.SizeZ);
-	AddCopyTexturePass(GraphBuilder, Velocity.X, InX, CopyInfo);
-	AddCopyTexturePass(GraphBuilder, Velocity.Y, InY, CopyInfo);
-	AddCopyTexturePass(GraphBuilder, Velocity.Z, InZ, CopyInfo);
-	GraphBuilder.Execute();
+	ChannelsInOut.X = OutX;
+	ChannelsInOut.Y = OutY;
+	ChannelsInOut.Z = OutZ;
 }

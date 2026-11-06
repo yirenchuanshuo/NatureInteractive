@@ -10,45 +10,45 @@ RWTexture3D<float> WindFieldVelocityZOutput;
 
 
 float3 NumCells;
+float3 CellSize;
 
+// Final projection stage: v <- v - grad(p), with grad(p) = 0.5 * dp / h per axis.
+// The previous "(PU0 - PU1)/h * h/3" cancelled h entirely and left only a 1/3 factor, which made
+// the correction roughly 4/(9*N) of its correct magnitude (i.e. the projection barely did anything).
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldProjectThirdCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	float h = 1.0/NumCells.x;
-	uint3 pos = ThreadId;
-	uint3 WindCellSize = NumCells.xyz - 1;
+	// Signed indices: subtracting 1 from a uint at index 0 wraps to 0xFFFFFFFF and defeats the clamp.
+	int3 pos = int3(ThreadId);
+	int3 MaxIdx = int3(NumCells) - 1;
 
-	uint3 PosRight = pos;
-	PosRight.x = min(PosRight.x + 1, WindCellSize.x);
+	// GroupCount rounds up, so the last group can contain threads past the texture bounds.
+	if (any(pos > MaxIdx))
+	{
+		return;
+	}
+
+	int3 PosRight = int3(min(pos.x + 1, MaxIdx.x), pos.y, pos.z);
+	int3 PosLeft  = int3(max(pos.x - 1, 0),        pos.y, pos.z);
+	int3 PosFront = int3(pos.x, min(pos.y + 1, MaxIdx.y), pos.z);
+	int3 PosBack  = int3(pos.x, max(pos.y - 1, 0),        pos.z);
+	int3 PosUp    = int3(pos.x, pos.y, min(pos.z + 1, MaxIdx.z));
+	int3 PosDown  = int3(pos.x, pos.y, max(pos.z - 1, 0));
+
 	float PU0 = WindFieldPressureInput[PosRight];
-
-	uint3 PosFront = pos;
-	PosFront.y = min(PosFront.y + 1, WindCellSize.y);
-	float PV0 = WindFieldPressureInput[PosFront];
-
-	uint3 PosUp = pos;
-	PosUp.z = min(PosUp.z + 1, WindCellSize.z);
-	float PW0 = WindFieldPressureInput[PosUp];
-
-	uint3 PosLeft = pos;
-	PosLeft.x = max(PosLeft.x - 1, 0);
 	float PU1 = WindFieldPressureInput[PosLeft];
-
-	uint3 PosBack = pos;
-	PosBack.y = max(PosBack.y - 1, 0);
+	float PV0 = WindFieldPressureInput[PosFront];
 	float PV1 = WindFieldPressureInput[PosBack];
-
-	uint3 PosDown = pos;
-	PosDown.z = max(PosDown.z - 1, 0);
+	float PW0 = WindFieldPressureInput[PosUp];
 	float PW1 = WindFieldPressureInput[PosDown];
 
 	float U = WindFieldVelocityXInput[pos];
 	float V = WindFieldVelocityYInput[pos];
 	float W = WindFieldVelocityZInput[pos];
 
-	U -= (PU0 - PU1)/h * h/3;
-	V -= (PV0 - PV1)/h * h/3;
-	W -= (PW0 - PW1)/h * h/3;
+	U -= 0.5 * (PU0 - PU1) / CellSize.x;
+	V -= 0.5 * (PV0 - PV1) / CellSize.y;
+	W -= 0.5 * (PW0 - PW1) / CellSize.z;
 
 	WindFieldVelocityXOutput[pos] = U;
 	WindFieldVelocityYOutput[pos] = V;

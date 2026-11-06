@@ -9,74 +9,84 @@ RWTexture3D<float> WindFieldPressureOutput;
 RWTexture3D<float> WindFieldDivergenceOutput;
 
 float3 NumCells;
+float3 CellSize;
 
+// Pressure projection solves  laplacian(p) = div(v)  and then subtracts grad(p) from v.
+// Discretised with per-axis spacing h = CellSize:
+//   div(v)      = 0.5 * ( dU/hx + dV/hy + dW/hz )
+//   laplacian(p)= sum over axes of (p+ + p- - 2p) / h^2
+// so the Jacobi update is
+//   p = ( sum(ia * (p+ + p-)) - div ) / ( 2 * sum(ia) ),   ia = 1/h^2
+// and the correction is  v -= 0.5 * dp / h.
+// Using 1/NumCells.x as a single isotropic h was wrong for non-cubic grids, and the previous
+// -h/3 divergence scale combined with a "- Div" in the solver flipped the sign of the whole step.
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldProjectFirstCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	float h = 1.0/NumCells.x;
-	uint3 pos = ThreadId;
-	uint3 WindCellSize = NumCells.xyz - 1;
+	// Signed indices: subtracting 1 from a uint at index 0 wraps to 0xFFFFFFFF and defeats the clamp.
+	int3 pos = int3(ThreadId);
+	int3 MaxIdx = int3(NumCells) - 1;
 
-	uint3 PosRight = pos;
-	PosRight.x = min(PosRight.x + 1,WindCellSize.x);
+	// GroupCount rounds up, so the last group can contain threads past the texture bounds.
+	if (any(pos > MaxIdx))
+	{
+		return;
+	}
+
+	int3 PosRight = int3(min(pos.x + 1, MaxIdx.x), pos.y, pos.z);
+	int3 PosLeft  = int3(max(pos.x - 1, 0),        pos.y, pos.z);
+	int3 PosFront = int3(pos.x, min(pos.y + 1, MaxIdx.y), pos.z);
+	int3 PosBack  = int3(pos.x, max(pos.y - 1, 0),        pos.z);
+	int3 PosUp    = int3(pos.x, pos.y, min(pos.z + 1, MaxIdx.z));
+	int3 PosDown  = int3(pos.x, pos.y, max(pos.z - 1, 0));
+
 	float U0 = WindFieldVelocityXInput[PosRight];
-
-	uint3 PosFront = pos;
-	PosFront.y = min(PosFront.y + 1, WindCellSize.y);
-	float V0 = WindFieldVelocityYInput[PosFront];
-
-	uint3 PosUp = pos;
-	PosUp.z = min(PosUp.z + 1, WindCellSize.z);
-	float W0 = WindFieldVelocityZInput[PosUp];
-
-	uint3 PosLeft = pos;
-	PosLeft.x = max(PosLeft.x - 1, 0);
 	float U1 = WindFieldVelocityXInput[PosLeft];
-
-	uint3 PosBack = pos;
-	PosBack.y = max(PosBack.y - 1, 0);
+	float V0 = WindFieldVelocityYInput[PosFront];
 	float V1 = WindFieldVelocityYInput[PosBack];
-
-	uint3 PosDown = pos;
-	PosDown.z = max(PosDown.z - 1, 0);
+	float W0 = WindFieldVelocityZInput[PosUp];
 	float W1 = WindFieldVelocityZInput[PosDown];
 
-	WindFieldDivergenceOutput[pos] = -h/3 * (U0 - U1 + V0 - V1 + W0 - W1);
+	// Physical divergence (central difference). Storing it unscaled also makes it directly usable
+	// for debug visualisation: after the project pass it should be close to zero everywhere.
+	float Divergence = 0.5 * ((U0 - U1) / CellSize.x + (V0 - V1) / CellSize.y + (W0 - W1) / CellSize.z);
+
+	WindFieldDivergenceOutput[pos] = Divergence;
 	WindFieldPressureOutput[pos] = 0;
 }
 
 [numthreads(SIZE_X,SIZE_Y,SIZE_Z)]
 void WindFieldProjectSecondCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	uint3 pos = ThreadId;
-	float Div = WindFieldDivergenceInput[pos];
-	
-	uint3 WindCellSize = NumCells.xyz - 1;
-	
-	uint3 PosRight = pos;
-	PosRight.x = min(PosRight.x + 1, WindCellSize.x);
+	int3 pos = int3(ThreadId);
+	int3 MaxIdx = int3(NumCells) - 1;
+
+	// GroupCount rounds up, so the last group can contain threads past the texture bounds.
+	if (any(pos > MaxIdx))
+	{
+		return;
+	}
+
+	float Divergence = WindFieldDivergenceInput[pos];
+
+	int3 PosRight = int3(min(pos.x + 1, MaxIdx.x), pos.y, pos.z);
+	int3 PosLeft  = int3(max(pos.x - 1, 0),        pos.y, pos.z);
+	int3 PosFront = int3(pos.x, min(pos.y + 1, MaxIdx.y), pos.z);
+	int3 PosBack  = int3(pos.x, max(pos.y - 1, 0),        pos.z);
+	int3 PosUp    = int3(pos.x, pos.y, min(pos.z + 1, MaxIdx.z));
+	int3 PosDown  = int3(pos.x, pos.y, max(pos.z - 1, 0));
+
 	float PU0 = WindFieldPressureInput[PosRight];
-
-	uint3 PosFront = pos;
-	PosFront.y = min(PosFront.y + 1, WindCellSize.y);
-	float PV0 = WindFieldPressureInput[PosFront];
-
-	uint3 PosUp = pos;
-	PosUp.z = min(PosUp.z + 1, WindCellSize.z);
-	float PW0 = WindFieldPressureInput[PosUp];
-
-	uint3 PosLeft = pos;
-	PosLeft.x = max(PosLeft.x - 1, 0);
 	float PU1 = WindFieldPressureInput[PosLeft];
-
-	uint3 PosBack = pos;
-	PosBack.y = max(PosBack.y - 1, 0);
+	float PV0 = WindFieldPressureInput[PosFront];
 	float PV1 = WindFieldPressureInput[PosBack];
-
-	uint3 PosDown = pos;
-	PosDown.z = max(PosDown.z - 1, 0);
+	float PW0 = WindFieldPressureInput[PosUp];
 	float PW1 = WindFieldPressureInput[PosDown];
 
-	WindFieldPressureOutput[pos] = (PU0 + PU1 + PV0 + PV1 + PW0 + PW1 - Div) / 6;
+	float3 InvH2 = 1.0 / (CellSize * CellSize);
+	float Denominator = 2.0 * (InvH2.x + InvH2.y + InvH2.z);
+
+	WindFieldPressureOutput[pos] =
+		(InvH2.x * (PU0 + PU1) + InvH2.y * (PV0 + PV1) + InvH2.z * (PW0 + PW1) - Divergence) / Denominator;
 }
